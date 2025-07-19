@@ -1,0 +1,58 @@
+{
+  "devices": {
+    "spine1": {
+      "hostname": "172.20.20.100",
+      "platform": "arista_eos",
+      "username": "admin",
+      "password": "admin",
+      "device_type": "spine",
+      "site": "lab",
+      "vendor": "arista",
+      "role": "spine"
+    },
+    "leaf1": {
+      "hostname": "172.20.20.101",
+      "platform": "arista_eos",
+      "username": "admin",
+      "password": "admin",
+      "device_type": "leaf",
+      "site": "lab",
+      "vendor": "arista",
+      "role": "leaf"
+    },
+    "leaf2": {
+      "hostname": "172.20.20.102",
+      "platform": "arista_eos",
+      "username": "admin",
+      "password": "admin",
+      "device_type": "leaf",
+      "site": "lab",
+      "vendor": "arista",
+      "role": "leaf"
+    }
+  },
+  "groups": {
+    "arista": {
+      "platform": "arista_eos",
+      "connection_options": {
+        "netmiko": {
+          "device_type": "arista_eos",
+          "global_delay_factor": 2,
+          "timeout": 30
+        }
+      }
+    },
+    "lab": {
+      "site": "lab",
+      "environment": "development"
+    },
+    "spines": {
+      "role": "spine",
+      "description": "Spine switches in the fabric"
+    },
+    "leaves": {
+      "role": "leaf",
+      "description": "Leaf switches in the fabric"
+    }
+  }
+}
