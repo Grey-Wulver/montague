@@ -1,6 +1,6 @@
 [tool.ruff]
 # Set the maximum line length. 88 is the standard set by Black.
-line-length = 88
+line-length = 100
 
 # Enable Pyflakes (F), pycodestyle (E, W), isort (I), and pyupgrade (UP) rule sets.
 select = ["E", "W", "F", "I", "UP"]

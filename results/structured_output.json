@@ -1,0 +1,11 @@
+{
+    "leaf1": {
+        "error": "Task failed for host leaf1. Exception: None"
+    },
+    "leaf2": {
+        "error": "Task failed for host leaf2. Exception: None"
+    },
+    "spine1": {
+        "error": "Task failed for host spine1. Exception: None"
+    }
+}

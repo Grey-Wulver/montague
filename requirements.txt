@@ -1,0 +1,17 @@
+# requirements.txt
+
+# Core automation and inventory management
+nornir
+
+# Nornir plugins
+nornir-netmiko
+nornir-utils
+
+# For connecting to HashiCorp Vault
+hvac
+
+# For parsing CLI output into structured data
+genie
+
+# For handling YAML files
+pyyaml

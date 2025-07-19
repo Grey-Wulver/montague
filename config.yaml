@@ -1,0 +1,14 @@
+# Nornir Configuration File
+
+runner:
+  plugin: threaded
+  options:
+    # Number of concurrent threads to use when connecting to devices
+    num_workers: 20
+
+inventory:
+  plugin: SimpleInventory
+  options:
+    # This path points directly to your existing containerlab inventory file.
+    # It's relative to the project root, where you will run the script from.
+    host_file: "labs/clab-arista_lab/nornir-simple-inventory.yml"
