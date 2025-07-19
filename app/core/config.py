@@ -1,7 +1,7 @@
 # app/core/config.py
 from typing import Optional
 
-from pydantic_settings import BaseSettings
+from pydantic import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     # Network Automation
     default_timeout: int = 30
     max_concurrent_devices: int = 10
+
+    # LLM Configuration
+    ollama_url: str = "http://localhost:11434"
+    ollama_model: str = "codellama:13b"
+    llm_enabled: bool = True
+    llm_timeout: int = 30
+    llm_max_retries: int = 2
+    normalization_cache_size: int = 1000
 
     class Config:
         env_file = ".env"

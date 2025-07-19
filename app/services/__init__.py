@@ -1,10 +1,11 @@
 # app/services/__init__.py
 from .command_translator import CommandTranslator, command_translator
 from .community_mapper import CommunityCommandMapper, community_mapper
+from .enhanced_output_normalizer import enhanced_normalizer
 from .executor import NetworkExecutor, network_executor
 from .intent_executor import IntentExecutor, intent_executor
 from .inventory import InventoryService, inventory_service
-from .output_normalizer import OutputNormalizer, output_normalizer
+from .local_llm_normalizer import LocalLLMNormalizer, local_llm_normalizer
 
 __all__ = [
     "inventory_service",
@@ -17,6 +18,7 @@ __all__ = [
     "IntentExecutor",
     "community_mapper",
     "CommunityCommandMapper",
-    "output_normalizer",
-    "OutputNormalizer",
+    "enhanced_normalizer",
+    "local_llm_normalizer",
+    "LocalLLMNormalizer",
 ]

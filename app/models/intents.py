@@ -44,13 +44,17 @@ class DeviceIntentResult(BaseModel):
 
     device: str = Field(..., description="Device name")
     intent: NetworkIntent = Field(..., description="Network intent executed")
-    status: str = Field(..., description="Execution status (success/failed)")
+    status: str = Field(..., description="Execution status (success/failed/partial)")
     normalized_output: Optional[Dict] = Field(None, description="Standardized output format")
     raw_output: Optional[str] = Field(None, description="Raw command output")
     vendor_command: Optional[str] = Field(None, description="Actual command executed")
     execution_time: Optional[float] = Field(None, description="Execution time in seconds")
     error_message: Optional[str] = Field(None, description="Error message if failed")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="Execution timestamp")
+
+    # NEW: LLM-related fields
+    normalization_method: Optional[str] = Field(None, description="Method used: manual/llm/cache/fallback")
+    confidence_score: Optional[float] = Field(None, description="Normalization confidence (0.0-1.0)")
 
 
 class IntentResponse(BaseModel):
