@@ -1,39 +1,39 @@
 # Core Framework
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.5.0
-pydantic-settings==2.1.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
 
 # Network Automation
-nornir==3.4.1
-nornir-netmiko==1.0.0
-netmiko==4.3.0
-pyats[full]==23.11
-textfsm==1.1.3
-ntc-templates==1.0.0
+nornir>=3.4.0
+nornir-netmiko>=1.0.0
+netmiko>=4.4.0
+pyats[full]>=25.6
+textfsm  # Let nornir-netmiko control the version
+ntc-templates>=1.0.0
 
 # Database & Caching
-sqlalchemy==2.0.23
-redis==5.0.1
-databases[sqlite]==0.8.0
+sqlalchemy>=2.0.0
+redis>=5.2.0
+databases[sqlite]>=0.9.0
 
 # AI/ML
-openai==1.3.8
+openai>=1.57.0
 
 # HTTP & API
-httpx==0.25.2
-python-multipart==0.0.6
+httpx>=0.28.0
+python-multipart>=0.0.18
 
 # Security
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
 
 # Utilities
-python-dotenv==1.0.0
+python-dotenv>=1.0.0
 
 # Development
-pytest==7.4.3
-pytest-asyncio==0.21.1
-black==23.11.0
-isort==5.12.0
-mypy==1.7.1
+pytest>=8.3.0
+pytest-asyncio>=0.24.0
+black>=24.10.0
+isort>=5.13.0
+mypy>=1.13.0
