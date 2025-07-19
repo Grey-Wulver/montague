@@ -44,3 +44,6 @@ Device settings: arista_eos 172.20.20.100:22
 
 
 2025-07-19 13:59:33,815 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show version', 'read_timeout': 30} on 1 hosts
+2025-07-19 14:30:16,598 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show version', 'read_timeout': 30} on 1 hosts
+2025-07-19 14:30:44,372 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show version', 'read_timeout': 30} on 3 hosts
+2025-07-19 14:31:10,871 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show interfaces status', 'read_timeout': 30} on 1 hosts

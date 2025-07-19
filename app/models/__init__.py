@@ -7,6 +7,7 @@ from .commands import (
     OutputFormat,
 )
 from .devices import Device, DeviceGroup, DeviceList, DeviceStatus, DeviceType
+from .intents import DeviceIntentResult, IntentRequest, IntentResponse, NetworkIntent
 
 __all__ = [
     "Device",
@@ -19,4 +20,8 @@ __all__ = [
     "DeviceCommandResult",
     "CommandStatus",
     "OutputFormat",
+    "NetworkIntent",
+    "IntentRequest",
+    "IntentResponse",
+    "DeviceIntentResult",
 ]

@@ -56,5 +56,21 @@ try:
 except Exception as e:
     print(f"❌ Failed to import commands router: {e}")
 
+try:
+    from app.routers import intents
+
+    app.include_router(intents.router, prefix="/api/v1/intents", tags=["intents"])
+    print("✅ Successfully included intents router")
+except Exception as e:
+    print(f"❌ Failed to import intents router: {e}")
+
+try:
+    from app.routers import discovery
+
+    app.include_router(discovery.router, prefix="/api/v1/discovery", tags=["discovery"])
+    print("✅ Successfully included discovery router")
+except Exception as e:
+    print(f"❌ Failed to import discovery router: {e}")
+
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True, log_level="info")
