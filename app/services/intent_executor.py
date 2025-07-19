@@ -6,6 +6,7 @@ from app.models.intents import DeviceIntentResult, IntentRequest, IntentResponse
 from app.services.command_translator import command_translator
 from app.services.executor import network_executor
 from app.services.inventory import inventory_service
+from app.services.output_normalizer import output_normalizer
 
 logger = logging.getLogger(__name__)
 
@@ -85,13 +86,33 @@ class IntentExecutor:
                     device_names=devices, command=command, timeout=request.timeout
                 )
 
-                # Convert command results to intent results
+                # Convert command results to intent results with normalization
                 for device_result in cmd_response.results:
+                    normalized_output = None
+
+                    if device_result.status == "success" and device_result.raw_output:
+                        device = inventory_service.get_device(device_result.device)
+                        try:
+                            # Add normalization step
+                            normalized_output = output_normalizer.normalize(
+                                intent=request.intent,
+                                raw_output=device_result.raw_output,
+                                device_platform=device.platform,
+                                command=command,
+                            )
+                            if normalized_output:
+                                logger.info(f"Successfully normalized output for {device_result.device}")
+                            else:
+                                logger.info(f"No normalization available for {device_result.device}")
+                        except Exception as e:
+                            logger.error(f"Normalization failed for {device_result.device}: {e}")
+                            normalized_output = None
+
                     intent_result = DeviceIntentResult(
                         device=device_result.device,
                         intent=request.intent,
                         status=device_result.status,
-                        normalized_output=None,  # TODO: Add output normalization in Phase 2
+                        normalized_output=normalized_output.model_dump() if normalized_output else None,
                         raw_output=device_result.raw_output,
                         vendor_command=command,
                         execution_time=device_result.execution_time,

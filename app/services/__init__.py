@@ -4,6 +4,7 @@ from .community_mapper import CommunityCommandMapper, community_mapper
 from .executor import NetworkExecutor, network_executor
 from .intent_executor import IntentExecutor, intent_executor
 from .inventory import InventoryService, inventory_service
+from .output_normalizer import OutputNormalizer, output_normalizer
 
 __all__ = [
     "inventory_service",
@@ -16,4 +17,6 @@ __all__ = [
     "IntentExecutor",
     "community_mapper",
     "CommunityCommandMapper",
+    "output_normalizer",
+    "OutputNormalizer",
 ]
