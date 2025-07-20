@@ -53,9 +53,13 @@ class DeviceCommandResult(BaseModel):
     command: str = Field(..., description="Command executed")
     status: CommandStatus = Field(..., description="Execution status")
     raw_output: Optional[str] = Field(None, description="Raw command output")
-    structured_output: Optional[Dict[str, Any]] = Field(None, description="Parsed output")
+    structured_output: Optional[Dict[str, Any]] = Field(
+        None, description="Parsed output"
+    )
     error_message: Optional[str] = Field(None, description="Error message if failed")
-    execution_time: Optional[float] = Field(None, description="Execution time in seconds")
+    execution_time: Optional[float] = Field(
+        None, description="Execution time in seconds"
+    )
     timestamp: datetime = Field(
         default_factory=datetime.utcnow, description="When command was executed"
     )
@@ -67,11 +71,15 @@ class CommandResponse(BaseModel):
     request_id: str = Field(
         default_factory=lambda: str(uuid.uuid4()), description="Unique request ID"
     )
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Request timestamp")
+    timestamp: datetime = Field(
+        default_factory=datetime.utcnow, description="Request timestamp"
+    )
     total_devices: int = Field(..., description="Total number of devices")
     successful: int = Field(..., description="Number of successful executions")
     failed: int = Field(..., description="Number of failed executions")
-    results: List[DeviceCommandResult] = Field(..., description="Individual device results")
+    results: List[DeviceCommandResult] = Field(
+        ..., description="Individual device results"
+    )
 
     class Config:
         json_schema_extra = {

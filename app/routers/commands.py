@@ -16,7 +16,9 @@ async def execute_command(request: CommandRequest):
     Execute a command on multiple network devices
     """
     try:
-        logger.info(f"Executing command '{request.command}' on devices: {request.devices}")
+        logger.info(
+            f"Executing command '{request.command}' on devices: {request.devices}"
+        )
 
         # Validate that we have devices
         if not request.devices:
@@ -24,7 +26,9 @@ async def execute_command(request: CommandRequest):
 
         # Execute the command
         result = await network_executor.execute_command(
-            device_names=request.devices, command=request.command, timeout=request.timeout
+            device_names=request.devices,
+            command=request.command,
+            timeout=request.timeout,
         )
 
         logger.info(
@@ -36,7 +40,9 @@ async def execute_command(request: CommandRequest):
         raise
     except Exception as e:
         logger.error(f"Error executing command: {e}")
-        raise HTTPException(status_code=500, detail=f"Command execution failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Command execution failed: {str(e)}"
+        ) from e
 
 
 @router.get("/commands/common")
@@ -64,7 +70,12 @@ async def get_common_commands():
             "show spanning-tree",
             "show interfaces trunk",
         ],
-        "diagnostics": ["show processes top", "show memory", "show logging", "show tech-support"],
+        "diagnostics": [
+            "show processes top",
+            "show memory",
+            "show logging",
+            "show tech-support",
+        ],
     }
 
     return common_commands

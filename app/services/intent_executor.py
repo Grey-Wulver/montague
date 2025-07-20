@@ -43,7 +43,9 @@ class IntentExecutor:
 
             command = command_translator.get_command(request.intent, device)
             if not command:
-                logger.warning(f"Intent {request.intent} not supported on {device.platform}")
+                logger.warning(
+                    f"Intent {request.intent} not supported on {device.platform}"
+                )
                 unsupported_devices.append(device_name)
                 continue
 
@@ -111,12 +113,14 @@ class IntentExecutor:
                         device = inventory_service.get_device(device_result.device)
                         try:
                             # Enhanced normalization with LLM support
-                            normalization_result = await enhanced_normalizer.normalize_output(
-                                raw_output=device_result.raw_output,
-                                intent=request.intent,
-                                vendor=device.platform,
-                                command=command,
-                                device_name=device_result.device,
+                            normalization_result = (
+                                await enhanced_normalizer.normalize_output(
+                                    raw_output=device_result.raw_output,
+                                    intent=request.intent,
+                                    vendor=device.platform,
+                                    command=command,
+                                    device_name=device_result.device,
+                                )
                             )
 
                             if normalization_result.success:
@@ -148,7 +152,9 @@ class IntentExecutor:
                                 )
 
                         except Exception as e:
-                            logger.error(f"Normalization error for {device_result.device}: {e}")
+                            logger.error(
+                                f"Normalization error for {device_result.device}: {e}"
+                            )
                             self.stats["failed_normalizations"] += 1
                             normalization_method = "error"
                             confidence_score = 0.0
@@ -156,7 +162,9 @@ class IntentExecutor:
                     # Determine overall status based on execution and normalization
                     overall_status = device_result.status
                     if device_result.status == "success" and normalized_output is None:
-                        overall_status = "partial"  # Command succeeded but normalization failed
+                        overall_status = (
+                            "partial"  # Command succeeded but normalization failed
+                        )
 
                     intent_result = DeviceIntentResult(
                         device=device_result.device,
@@ -194,7 +202,9 @@ class IntentExecutor:
         partial = len([r for r in results if r.status == "partial"])
         failed = len(results) - successful - partial
 
-        logger.info(f"Intent execution completed - Success: {successful}, " f"Partial: {partial}, Failed: {failed}")
+        logger.info(
+            f"Intent execution completed - Success: {successful}, Partial: {partial}, Failed: {failed}"
+        )
 
         # Log normalization statistics
         if self.stats["total_executions"] % 10 == 0:  # Log every 10 executions
@@ -203,12 +213,15 @@ class IntentExecutor:
         return IntentResponse(
             intent=request.intent,
             total_devices=len(request.devices),
-            successful=successful + partial,  # Count partial as successful for API response
+            successful=successful
+            + partial,  # Count partial as successful for API response
             failed=failed,
             results=results,
         )
 
-    def _group_devices_by_command(self, device_commands: Dict[str, str]) -> Dict[str, List[str]]:
+    def _group_devices_by_command(
+        self, device_commands: Dict[str, str]
+    ) -> Dict[str, List[str]]:
         """Group devices that use the same command for efficiency"""
         command_groups = {}
         for device, command in device_commands.items():
@@ -219,11 +232,18 @@ class IntentExecutor:
 
     def _log_stats(self):
         """Log execution and normalization statistics"""
-        total_norm_attempts = self.stats["successful_normalizations"] + self.stats["failed_normalizations"]
+        total_norm_attempts = (
+            self.stats["successful_normalizations"]
+            + self.stats["failed_normalizations"]
+        )
 
         if total_norm_attempts > 0:
-            success_rate = (self.stats["successful_normalizations"] / total_norm_attempts) * 100
-            manual_rate = (self.stats["manual_normalizations"] / total_norm_attempts) * 100
+            success_rate = (
+                self.stats["successful_normalizations"] / total_norm_attempts
+            ) * 100
+            manual_rate = (
+                self.stats["manual_normalizations"] / total_norm_attempts
+            ) * 100
             llm_rate = (self.stats["llm_normalizations"] / total_norm_attempts) * 100
             cache_rate = (self.stats["cache_hits"] / total_norm_attempts) * 100
 
@@ -237,7 +257,10 @@ class IntentExecutor:
 
     def get_stats(self) -> Dict:
         """Get execution statistics"""
-        total_norm_attempts = self.stats["successful_normalizations"] + self.stats["failed_normalizations"]
+        total_norm_attempts = (
+            self.stats["successful_normalizations"]
+            + self.stats["failed_normalizations"]
+        )
 
         stats = {
             **self.stats,
@@ -254,8 +277,12 @@ class IntentExecutor:
             stats["manual_normalization_rate"] = round(
                 (self.stats["manual_normalizations"] / total_norm_attempts) * 100, 2
             )
-            stats["llm_normalization_rate"] = round((self.stats["llm_normalizations"] / total_norm_attempts) * 100, 2)
-            stats["cache_hit_rate"] = round((self.stats["cache_hits"] / total_norm_attempts) * 100, 2)
+            stats["llm_normalization_rate"] = round(
+                (self.stats["llm_normalizations"] / total_norm_attempts) * 100, 2
+            )
+            stats["cache_hit_rate"] = round(
+                (self.stats["cache_hits"] / total_norm_attempts) * 100, 2
+            )
 
         return stats
 

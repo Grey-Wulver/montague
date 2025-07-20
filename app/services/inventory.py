@@ -19,10 +19,12 @@ class InventoryService:
         try:
             with open(self.inventory_file) as f:
                 return json.load(f)
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Inventory file not found: {self.inventory_file}")
+        except FileNotFoundError as e:
+            raise FileNotFoundError(
+                f"Inventory file not found: {self.inventory_file}"
+            ) from e
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON in inventory file: {e}")
+            raise ValueError(f"Invalid JSON in inventory file: {e}") from e
 
     def _get_devices_data(self) -> Dict:
         """Get devices data with caching"""
@@ -110,7 +112,8 @@ class InventoryService:
 
         for name, data in groups_data.items():
             group = DeviceGroup(
-                name=name, **{k: v for k, v in data.items() if k != "connection_options"}
+                name=name,
+                **{k: v for k, v in data.items() if k != "connection_options"},
             )
             groups.append(group)
 

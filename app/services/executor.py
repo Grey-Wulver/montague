@@ -173,7 +173,9 @@ class NetworkExecutor:
                 execution_time = time.time() - start_time
 
                 if result.failed:
-                    error_msg = str(result.exception) if result.exception else "Unknown error"
+                    error_msg = (
+                        str(result.exception) if result.exception else "Unknown error"
+                    )
                     logger.error(f"Command failed on {device_name}: {error_msg}")
 
                     device_result = DeviceCommandResult(
@@ -212,10 +214,15 @@ class NetworkExecutor:
         successful = len([r for r in results if r.status == CommandStatus.SUCCESS])
         failed = len(results) - successful
 
-        logger.info(f"Command execution summary - Success: {successful}, Failed: {failed}")
+        logger.info(
+            f"Command execution summary - Success: {successful}, Failed: {failed}"
+        )
 
         return CommandResponse(
-            total_devices=len(device_names), successful=successful, failed=failed, results=results
+            total_devices=len(device_names),
+            successful=successful,
+            failed=failed,
+            results=results,
         )
 
 

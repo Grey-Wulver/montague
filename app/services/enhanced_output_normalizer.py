@@ -36,7 +36,12 @@ class EnhancedOutputNormalizer:
     def __init__(self):
         self.llm_available = False
         self._normalization_cache = {}  # Cache LLM results
-        self.stats = {"manual_normalizations": 0, "llm_normalizations": 0, "cache_hits": 0, "fallback_to_raw": 0}
+        self.stats = {
+            "manual_normalizations": 0,
+            "llm_normalizations": 0,
+            "cache_hits": 0,
+            "fallback_to_raw": 0,
+        }
 
     async def initialize(self) -> bool:
         """Initialize normalizer and check LLM availability"""
@@ -48,7 +53,12 @@ class EnhancedOutputNormalizer:
         return self.llm_available
 
     async def normalize_output(
-        self, raw_output: str, intent: NetworkIntent, vendor: str, command: str, device_name: str
+        self,
+        raw_output: str,
+        intent: NetworkIntent,
+        vendor: str,
+        command: str,
+        device_name: str,
     ) -> NormalizationResult:
         """
         Main normalization entry point with hybrid strategy
@@ -71,9 +81,14 @@ class EnhancedOutputNormalizer:
             )
 
         # Strategy 1: Use fast manual parsers for critical intents
-        if intent in [NetworkIntent.GET_SYSTEM_VERSION, NetworkIntent.GET_INTERFACE_STATUS]:
+        if intent in [
+            NetworkIntent.GET_SYSTEM_VERSION,
+            NetworkIntent.GET_INTERFACE_STATUS,
+        ]:
             try:
-                result = await self._manual_normalize(raw_output, intent, vendor, device_name)
+                result = await self._manual_normalize(
+                    raw_output, intent, vendor, device_name
+                )
                 if result.success:
                     self.stats["manual_normalizations"] += 1
                     return result
@@ -83,10 +98,14 @@ class EnhancedOutputNormalizer:
         # Strategy 2: Use LLM for other intents or as fallback
         if self.llm_available:
             try:
-                llm_result = await local_llm_normalizer.normalize_output(raw_output, intent, vendor, command)
+                logger.info(f"Attempting LLM normalization for {intent} on {vendor}")
+                llm_result = await local_llm_normalizer.normalize_output(
+                    raw_output, intent, vendor, command
+                )
 
                 if llm_result.success:
                     self.stats["llm_normalizations"] += 1
+                    logger.info(f"LLM normalization successful for {intent}")
 
                     # Cache successful LLM results
                     self._normalization_cache[cache_key] = llm_result.normalized_data
@@ -99,12 +118,19 @@ class EnhancedOutputNormalizer:
                         confidence_score=llm_result.confidence_score,
                     )
                 else:
-                    logger.warning(f"LLM normalization failed: {llm_result.error_message}")
+                    logger.warning(
+                        f"LLM normalization failed: {llm_result.error_message}"
+                    )
             except Exception as e:
                 logger.error(f"LLM normalization error: {e}")
+        else:
+            logger.warning(
+                f"LLM not available, falling back to raw output for {intent}"
+            )
 
         # Strategy 3: Fallback to raw output with basic structure
         self.stats["fallback_to_raw"] += 1
+        logger.info(f"Using fallback normalization for {intent}")
         return self._fallback_normalization(raw_output, intent, device_name, start_time)
 
     async def _manual_normalize(
@@ -118,7 +144,9 @@ class EnhancedOutputNormalizer:
             if intent == NetworkIntent.GET_SYSTEM_VERSION:
                 normalized_data = await self._parse_version_manual(raw_output, vendor)
             elif intent == NetworkIntent.GET_INTERFACE_STATUS:
-                normalized_data = await self._parse_interfaces_manual(raw_output, vendor)
+                normalized_data = await self._parse_interfaces_manual(
+                    raw_output, vendor
+                )
             else:
                 raise ValueError(f"Manual parser not available for {intent}")
 
@@ -132,11 +160,16 @@ class EnhancedOutputNormalizer:
 
         except Exception as e:
             return NormalizationResult(
-                success=False, method_used="manual", processing_time=time.time() - start_time, error_message=str(e)
+                success=False,
+                method_used="manual",
+                processing_time=time.time() - start_time,
+                error_message=str(e),
             )
 
-    async def _parse_version_manual(self, raw_output: str, vendor: str) -> Dict[str, Any]:
-        """Manual parser for version information (your existing logic)"""
+    async def _parse_version_manual(
+        self, raw_output: str, vendor: str
+    ) -> Dict[str, Any]:
+        """Manual parser for version information"""
 
         lines = raw_output.strip().split("\n")
         result = {
@@ -181,14 +214,15 @@ class EnhancedOutputNormalizer:
 
         return result
 
-    async def _parse_interfaces_manual(self, raw_output: str, vendor: str) -> Dict[str, Any]:
-        """Manual parser for interface status (your existing logic)"""
+    async def _parse_interfaces_manual(
+        self, raw_output: str, vendor: str
+    ) -> Dict[str, Any]:
+        """Manual parser for interface status"""
 
         lines = raw_output.strip().split("\n")
         interfaces = []
 
         # Skip header lines and parse data
-        # data_started = False
         for line in lines:
             line = line.strip()
 
@@ -216,7 +250,9 @@ class EnhancedOutputNormalizer:
                     # Parse additional fields if available
                     if len(parts) >= 4:
                         try:
-                            interface["vlan"] = int(parts[3]) if parts[3].isdigit() else None
+                            interface["vlan"] = (
+                                int(parts[3]) if parts[3].isdigit() else None
+                            )
                         except Exception:
                             pass
 
@@ -253,14 +289,20 @@ class EnhancedOutputNormalizer:
             return None
 
     def _fallback_normalization(
-        self, raw_output: str, intent: NetworkIntent, device_name: str, start_time: float
+        self,
+        raw_output: str,
+        intent: NetworkIntent,
+        device_name: str,
+        start_time: float,
     ) -> NormalizationResult:
         """Fallback to basic structure when all else fails"""
 
         fallback_data = {
             "device": device_name,
             "intent": intent.value,
-            "raw_output": raw_output[:500] + "..." if len(raw_output) > 500 else raw_output,
+            "raw_output": raw_output[:500] + "..."
+            if len(raw_output) > 500
+            else raw_output,
             "normalized": False,
             "timestamp": time.time(),
             "note": "Raw output - normalization not available",
@@ -275,7 +317,9 @@ class EnhancedOutputNormalizer:
             raw_output_preview=raw_output[:200],
         )
 
-    def _generate_cache_key(self, raw_output: str, intent: NetworkIntent, vendor: str) -> str:
+    def _generate_cache_key(
+        self, raw_output: str, intent: NetworkIntent, vendor: str
+    ) -> str:
         """Generate cache key for LLM results"""
         import hashlib
 
@@ -294,9 +338,15 @@ class EnhancedOutputNormalizer:
         }
 
         if total_normalizations > 0:
-            result["manual_percentage"] = round((self.stats["manual_normalizations"] / total_normalizations) * 100, 2)
-            result["llm_percentage"] = round((self.stats["llm_normalizations"] / total_normalizations) * 100, 2)
-            result["cache_hit_rate"] = round((self.stats["cache_hits"] / total_normalizations) * 100, 2)
+            result["manual_percentage"] = round(
+                (self.stats["manual_normalizations"] / total_normalizations) * 100, 2
+            )
+            result["llm_percentage"] = round(
+                (self.stats["llm_normalizations"] / total_normalizations) * 100, 2
+            )
+            result["cache_hit_rate"] = round(
+                (self.stats["cache_hits"] / total_normalizations) * 100, 2
+            )
 
         # Include LLM stats if available
         if self.llm_available:

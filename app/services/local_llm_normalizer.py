@@ -29,13 +29,13 @@ class LLMNormalizationResult:
 class LocalLLMNormalizer:
     """
     Local LLM service for network command output normalization.
-    Integrates with Ollama running on the same VM.
+    Integrates with LM Studio running on Windows host.
     """
 
     def __init__(
         self,
-        ollama_url: str = "http://localhost:11434",
-        model_name: str = "codellama:13b",
+        ollama_url: str = "http://192.168.1.11:1234",
+        model_name: str = "meta-llama-3.1-8b-instruct",
         timeout: int = 30,
         max_retries: int = 2,
     ):
@@ -57,20 +57,24 @@ class LocalLLMNormalizer:
         }
 
     async def health_check(self) -> bool:
-        """Check if Ollama service is available and model is loaded"""
+        """Check if LM Studio service is available and model is loaded"""
         try:
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
-                async with session.get(f"{self.ollama_url}/api/tags") as response:
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as session:
+                async with session.get(f"{self.ollama_url}/v1/models") as response:
                     if response.status == 200:
                         data = await response.json()
-                        models = [model["name"] for model in data.get("models", [])]
+                        models = [model["id"] for model in data.get("data", [])]
                         return self.model_name in models
             return False
         except Exception as e:
             logger.error(f"LLM health check failed: {e}")
             return False
 
-    def _get_normalization_prompt(self, intent: NetworkIntent, vendor: str, raw_output: str) -> str:
+    def _get_normalization_prompt(
+        self, intent: NetworkIntent, vendor: str, raw_output: str
+    ) -> str:
         """Generate intent-specific normalization prompt"""
 
         # Cache key for prompt template
@@ -89,15 +93,13 @@ class LocalLLMNormalizer:
         """Generate intent-specific prompt templates"""
 
         common_instructions = """
-You are a network automation expert. Convert the raw network device output into clean, structured JSON.
+You are a network automation expert. Convert network device output to JSON.
 
-CRITICAL REQUIREMENTS:
-1. Return ONLY valid JSON - no explanations, no markdown, no extra text
-2. Use consistent field names across all vendors
-3. Handle missing data with null values
-4. Ensure all numeric values are properly typed (int/float, not strings)
-5. Standardize status values (up/down/admin-down)
-6. Include confidence score (0.0-1.0) based on parsing accuracy
+STRICT REQUIREMENTS:
+- Return ONLY a JSON object
+- No explanations, no markdown, no code blocks
+- Start response immediately with {{ and end with }}
+- No text before or after the JSON
 
 """
 
@@ -105,132 +107,53 @@ CRITICAL REQUIREMENTS:
             NetworkIntent.GET_SYSTEM_VERSION: f"""
 {common_instructions}
 
-Convert this {vendor} 'show version' output to standardized JSON:
-
-Expected JSON structure:
-{{
-    "vendor": "string",
-    "hostname": "string",
-    "os_version": "string",
-    "model": "string",
-    "serial_number": "string",
-    "uptime_seconds": integer,
-    "memory_total_kb": integer,
-    "memory_free_kb": integer,
-    "last_reload_reason": "string",
-    "confidence_score": float
-}}
+Convert this {vendor} version output to JSON with these fields:
+vendor, hostname, os_version, model, serial_number, uptime_seconds, memory_total_kb, memory_free_kb, last_reload_reason, confidence_score
 
 Raw Output:
 {{raw_output}}
 
-Return only valid JSON:""",
+JSON:""",
             NetworkIntent.GET_INTERFACE_STATUS: f"""
 {common_instructions}
 
-Convert this {vendor} interface status output to standardized JSON:
-
-Expected JSON structure:
-{{
-    "interfaces": [
-        {{
-            "interface": "string",
-            "status": "up|down|admin-down",
-            "protocol": "up|down",
-            "description": "string|null",
-            "speed": "string|null",
-            "duplex": "string|null",
-            "mtu": integer|null,
-            "ip_address": "string|null",
-            "subnet_mask": "string|null",
-            "vlan": integer|null
-        }}
-    ],
-    "total_interfaces": integer,
-    "up_interfaces": integer,
-    "down_interfaces": integer,
-    "confidence_score": float
-}}
+Convert this {vendor} interface output to JSON with these fields:
+interfaces (array), total_interfaces, up_interfaces, down_interfaces, confidence_score
 
 Raw Output:
 {{raw_output}}
 
-Return only valid JSON:""",
+JSON:""",
             NetworkIntent.GET_BGP_SUMMARY: f"""
 {common_instructions}
 
-Convert this {vendor} BGP summary output to standardized JSON:
-
-Expected JSON structure:
-{{
-    "router_id": "string",
-    "local_as": integer,
-    "neighbors": [
-        {{
-            "neighbor_ip": "string",
-            "remote_as": integer,
-            "state": "string",
-            "uptime": "string",
-            "prefixes_received": integer,
-            "prefixes_sent": integer
-        }}
-    ],
-    "total_neighbors": integer,
-    "established_neighbors": integer,
-    "confidence_score": float
-}}
+Convert this {vendor} BGP output to JSON with these exact fields:
+router_id, local_as, neighbors (array with neighbor_ip, remote_as, state, uptime, prefixes_received), total_neighbors, established_neighbors, confidence_score
 
 Raw Output:
 {{raw_output}}
 
-Return only valid JSON:""",
+JSON:""",
             NetworkIntent.GET_ARP_TABLE: f"""
 {common_instructions}
 
-Convert this {vendor} ARP table output to standardized JSON:
-
-Expected JSON structure:
-{{
-    "arp_entries": [
-        {{
-            "ip_address": "string",
-            "mac_address": "string",
-            "interface": "string",
-            "age": "string|null",
-            "type": "string|null"
-        }}
-    ],
-    "total_entries": integer,
-    "confidence_score": float
-}}
+Convert this {vendor} ARP output to JSON with these fields:
+arp_entries (array with ip_address, mac_address, interface, age, type), total_entries, confidence_score
 
 Raw Output:
 {{raw_output}}
 
-Return only valid JSON:""",
+JSON:""",
             NetworkIntent.GET_MAC_TABLE: f"""
 {common_instructions}
 
-Convert this {vendor} MAC address table output to standardized JSON:
-
-Expected JSON structure:
-{{
-    "mac_entries": [
-        {{
-            "mac_address": "string",
-            "vlan": integer,
-            "interface": "string",
-            "type": "string"
-        }}
-    ],
-    "total_entries": integer,
-    "confidence_score": float
-}}
+Convert this {vendor} MAC table output to JSON with these fields:
+mac_entries (array with mac_address, vlan, interface, type), total_entries, confidence_score
 
 Raw Output:
 {{raw_output}}
 
-Return only valid JSON:""",
+JSON:""",
         }
 
         return intent_prompts.get(
@@ -239,19 +162,18 @@ Return only valid JSON:""",
 {common_instructions}
 
 Convert this {vendor} network command output to structured JSON format.
-Analyze the output and create appropriate field names and structure.
 
 Raw Output:
 {{raw_output}}
 
-Return only valid JSON:""",
+JSON:""",
         )
 
     async def normalize_output(
         self, raw_output: str, intent: NetworkIntent, vendor: str, command: str
     ) -> LLMNormalizationResult:
         """
-        Normalize network command output using local LLM
+        Normalize network command output using LM Studio LLM
         """
         start_time = time.time()
         self.stats["total_requests"] += 1
@@ -263,8 +185,8 @@ Return only valid JSON:""",
             prompt = self._get_normalization_prompt(intent, vendor, raw_output)
             logger.debug(f"Generated prompt (first 200 chars): {prompt[:200]}...")
 
-            # Call Ollama API
-            normalized_data = await self._call_ollama(prompt)
+            # Call LM Studio API
+            normalized_data = await self._call_lm_studio(prompt)
 
             processing_time = time.time() - start_time
 
@@ -284,7 +206,9 @@ Return only valid JSON:""",
                 self.stats["failed_normalizations"] += 1
                 logger.error("LLM normalization failed: No valid JSON returned")
                 return LLMNormalizationResult(
-                    success=False, processing_time=processing_time, error_message="LLM returned invalid JSON"
+                    success=False,
+                    processing_time=processing_time,
+                    error_message="LLM returned invalid JSON",
                 )
 
         except Exception as e:
@@ -292,63 +216,93 @@ Return only valid JSON:""",
             processing_time = time.time() - start_time
 
             logger.error(f"LLM normalization failed: {e}")
-            return LLMNormalizationResult(success=False, processing_time=processing_time, error_message=str(e))
+            return LLMNormalizationResult(
+                success=False, processing_time=processing_time, error_message=str(e)
+            )
 
-    async def _call_ollama(self, prompt: str) -> Optional[Dict[str, Any]]:
-        """Make API call to local Ollama instance with improved JSON parsing"""
+    async def _call_lm_studio(self, prompt: str) -> Optional[Dict[str, Any]]:
+        """Make API call to LM Studio instance using OpenAI-compatible API"""
 
+        # OpenAI-compatible payload format
         payload = {
             "model": self.model_name,
-            "prompt": prompt,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.1,
+            "max_tokens": 2048,
             "stream": False,
-            "options": {
-                "temperature": 0.1,  # Low temperature for consistency
-                "top_p": 0.9,
-                "num_predict": 2048,  # Max tokens for response
-            },
         }
 
-        logger.debug(f"Calling Ollama API with model {self.model_name}")
+        logger.debug(f"Calling LM Studio API with model {self.model_name}")
 
         for attempt in range(self.max_retries + 1):
             try:
                 timeout = aiohttp.ClientTimeout(total=self.timeout)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.post(f"{self.ollama_url}/api/generate", json=payload) as response:
+                    async with session.post(
+                        f"{self.ollama_url}/v1/chat/completions",
+                        json=payload,
+                        headers={"Content-Type": "application/json"},
+                    ) as response:
                         if response.status == 200:
                             result = await response.json()
-                            response_text = result.get("response", "").strip()
 
-                            logger.debug(f"Raw LLM response: {response_text}")
+                            # Extract response from OpenAI format
+                            choices = result.get("choices", [])
+                            if choices:
+                                response_text = (
+                                    choices[0]
+                                    .get("message", {})
+                                    .get("content", "")
+                                    .strip()
+                                )
+                                logger.debug(f"Raw LLM response: {response_text}")
 
-                            # IMPROVED JSON PARSING
-                            try:
-                                # Clean the response text
-                                cleaned_response = self._clean_json_response(response_text)
-                                logger.debug(f"Cleaned response: {cleaned_response}")
+                                # IMPROVED JSON PARSING
+                                try:
+                                    # Clean the response text
+                                    cleaned_response = self._clean_json_response(
+                                        response_text
+                                    )
+                                    logger.debug(
+                                        f"Cleaned response: {cleaned_response}"
+                                    )
 
-                                parsed_json = json.loads(cleaned_response)
-                                logger.info("Successfully parsed JSON response")
-                                return parsed_json
+                                    parsed_json = json.loads(cleaned_response)
+                                    logger.info("Successfully parsed JSON response")
+                                    return parsed_json
 
-                            except json.JSONDecodeError as e:
-                                logger.warning(f"Invalid JSON from LLM (attempt {attempt + 1}): {e}")
-                                logger.warning(f"Problematic response: {response_text}")
+                                except json.JSONDecodeError as e:
+                                    logger.warning(
+                                        f"Invalid JSON from LLM (attempt {attempt + 1}): {e}"
+                                    )
+                                    logger.warning(
+                                        f"Problematic response: {response_text}"
+                                    )
 
-                                # Try to extract JSON from response if it's embedded in text
-                                extracted_json = self._extract_json_from_text(response_text)
-                                if extracted_json:
-                                    logger.info("Successfully extracted JSON from mixed response")
-                                    return extracted_json
+                                    # Try to extract JSON from response if it's embedded in text
+                                    extracted_json = self._extract_json_from_text(
+                                        response_text
+                                    )
+                                    if extracted_json:
+                                        logger.info(
+                                            "Successfully extracted JSON from mixed response"
+                                        )
+                                        return extracted_json
 
-                                if attempt < self.max_retries:
-                                    logger.info(f"Retrying LLM call (attempt {attempt + 2})")
-                                    await asyncio.sleep(1 * (attempt + 1))  # Exponential backoff
-                                    continue
+                                    if attempt < self.max_retries:
+                                        logger.info(
+                                            f"Retrying LLM call (attempt {attempt + 2})"
+                                        )
+                                        await asyncio.sleep(1 * (attempt + 1))
+                                        continue
+                            else:
+                                logger.error("No choices in LM Studio response")
 
                         else:
                             error_text = await response.text()
-                            logger.error(f"Ollama API error {response.status}: {error_text}")
+                            logger.error(
+                                f"LM Studio API error {response.status}: {error_text}"
+                            )
 
             except asyncio.TimeoutError:
                 logger.warning(f"LLM timeout (attempt {attempt + 1})")
@@ -367,54 +321,50 @@ Return only valid JSON:""",
 
     def _clean_json_response(self, response_text: str) -> str:
         """Clean common JSON formatting issues from LLM response"""
-        logger.debug(f"Original response: {repr(response_text[:100])}")
+        logger.debug(f"Original response: {repr(response_text)}")
 
-        # Remove markdown code blocks if present
-        if "```json" in response_text:
-            response_text = response_text.split("```json")[1].split("```")[0]
-            logger.debug("Removed markdown json code blocks")
-        elif "```" in response_text:
-            response_text = response_text.split("```")[1].split("```")[0]
-            logger.debug("Removed markdown code blocks")
+        # Remove common prefixes like "Here is the JSON:" etc.
+        lines = response_text.split("\n")
+        cleaned_lines = []
+        json_started = False
+        brace_count = 0
 
-        # Strip whitespace
-        response_text = response_text.strip()
+        for line in lines:
+            line = line.strip()
 
-        # Remove common prefixes/suffixes
-        prefixes_to_remove = ["JSON Response:", "Response:", "JSON:", "Output:", "Here is the JSON:"]
-        for prefix in prefixes_to_remove:
-            if response_text.startswith(prefix):
-                response_text = response_text[len(prefix) :].strip()
-                logger.debug(f"Removed prefix: {prefix}")
+            # Skip empty lines
+            if not line:
+                continue
 
-        # CRITICAL FIX: Ensure JSON starts with opening brace
-        if not response_text.startswith("{") and not response_text.startswith("["):
-            # Look for the first opening brace
-            brace_index = response_text.find("{")
-            bracket_index = response_text.find("[")
+            # Skip explanatory text before JSON
+            if not json_started and not line.startswith("{"):
+                continue
 
-            # Use whichever comes first (or only one that exists)
-            if brace_index >= 0 and (bracket_index < 0 or brace_index < bracket_index):
-                response_text = response_text[brace_index:]
-                logger.debug(f"Trimmed to start from opening brace at position {brace_index}")
-            elif bracket_index >= 0:
-                response_text = response_text[bracket_index:]
-                logger.debug(f"Trimmed to start from opening bracket at position {bracket_index}")
+            # Start collecting when we see an opening brace
+            if line.startswith("{") or json_started:
+                json_started = True
+                cleaned_lines.append(line)
 
-        # Remove trailing explanations (find the last closing brace/bracket)
-        if "{" in response_text and "}" in response_text:
-            last_brace = response_text.rfind("}")
-            if last_brace > 0:
-                response_text = response_text[: last_brace + 1]
-                logger.debug("Trimmed content after last closing brace")
-        elif "[" in response_text and "]" in response_text:
-            last_bracket = response_text.rfind("]")
-            if last_bracket > 0:
-                response_text = response_text[: last_bracket + 1]
-                logger.debug("Trimmed content after last closing bracket")
+                # Count braces to handle nested objects
+                brace_count += line.count("{") - line.count("}")
 
-        logger.debug(f"Final cleaned response: {repr(response_text[:100])}")
-        return response_text
+                # Stop when we complete the JSON object
+                if brace_count == 0 and json_started:
+                    break
+
+        # Join the JSON lines
+        cleaned_response = "\n".join(cleaned_lines)
+
+        # Fallback: if we didn't get valid JSON structure, try to extract it
+        if not cleaned_response.strip().startswith("{"):
+            start_idx = response_text.find("{")
+            if start_idx >= 0:
+                end_idx = response_text.rfind("}")
+                if end_idx > start_idx:
+                    cleaned_response = response_text[start_idx : end_idx + 1]
+
+        logger.debug(f"Cleaned response: {repr(cleaned_response)}")
+        return cleaned_response
 
     def _extract_json_from_text(self, text: str) -> Optional[Dict[str, Any]]:
         """Try to extract JSON object from mixed text response"""
@@ -422,32 +372,41 @@ Return only valid JSON:""",
 
         logger.debug("Attempting to extract JSON from mixed text")
 
-        # Look for JSON object patterns - improved regex
+        # Method 1: Find JSON between braces more aggressively
+        start_idx = text.find("{")
+        if start_idx >= 0:
+            # Find the matching closing brace
+            brace_count = 0
+            end_idx = start_idx
+
+            for i in range(start_idx, len(text)):
+                if text[i] == "{":
+                    brace_count += 1
+                elif text[i] == "}":
+                    brace_count -= 1
+                    if brace_count == 0:
+                        end_idx = i
+                        break
+
+            if brace_count == 0:  # Found matching brace
+                json_str = text[start_idx : end_idx + 1]
+                try:
+                    parsed = json.loads(json_str)
+                    logger.info("Successfully extracted JSON using brace matching")
+                    return parsed
+                except json.JSONDecodeError:
+                    pass
+
+        # Method 2: Regex fallback
         json_pattern = r"\{(?:[^{}]|{[^{}]*})*\}"
         matches = re.findall(json_pattern, text, re.DOTALL)
 
         for i, match in enumerate(matches):
             try:
-                # Try to parse each potential JSON match
                 parsed = json.loads(match.strip())
-                logger.info(f"Successfully parsed JSON from match {i + 1}")
+                logger.info(f"Successfully parsed JSON from regex match {i + 1}")
                 return parsed
-            except json.JSONDecodeError as e:
-                logger.debug(f"Failed to parse match {i + 1}: {e}")
-                continue
-
-        # Look for array patterns
-        array_pattern = r"\[(?:[^\[\]]|\[[^\[\]]*\])*\]"
-        matches = re.findall(array_pattern, text, re.DOTALL)
-
-        for i, match in enumerate(matches):
-            try:
-                parsed = json.loads(match.strip())
-                # If it's an array, wrap it in an object
-                logger.info(f"Successfully parsed array from match {i + 1}")
-                return {"data": parsed}
-            except json.JSONDecodeError as e:
-                logger.debug(f"Failed to parse array match {i + 1}: {e}")
+            except json.JSONDecodeError:
                 continue
 
         logger.warning("Could not extract valid JSON from response")
@@ -461,13 +420,17 @@ Return only valid JSON:""",
             # Running average calculation
             current_avg = self.stats["average_processing_time"]
             total_successful = self.stats["successful_normalizations"]
-            self.stats["average_processing_time"] = (current_avg * (total_successful - 1) + new_time) / total_successful
+            self.stats["average_processing_time"] = (
+                current_avg * (total_successful - 1) + new_time
+            ) / total_successful
 
     def get_stats(self) -> Dict[str, Any]:
         """Get normalization statistics"""
         success_rate = 0.0
         if self.stats["total_requests"] > 0:
-            success_rate = (self.stats["successful_normalizations"] / self.stats["total_requests"]) * 100
+            success_rate = (
+                self.stats["successful_normalizations"] / self.stats["total_requests"]
+            ) * 100
 
         return {
             **self.stats,
