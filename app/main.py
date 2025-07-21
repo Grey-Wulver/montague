@@ -6,17 +6,22 @@ from contextlib import asynccontextmanager
 
 import aiohttp
 import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.services.enhanced_output_normalizer import enhanced_normalizer
+
+load_dotenv()
 
 # Add the project root to the Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
 # Configure detailed logging for debugging
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 # Specifically enable debug for our LLM service
 logging.getLogger("app.services.local_llm_normalizer").setLevel(logging.DEBUG)
@@ -141,10 +146,16 @@ async def debug_json_parse():
             "error": str(e),
             "error_position": getattr(e, "pos", None),
             "cleaned_response": repr(cleaned) if "cleaned" in locals() else None,
-            "problem_char": repr(cleaned[e.pos : e.pos + 10]) if "cleaned" in locals() and hasattr(e, "pos") else None,
+            "problem_char": repr(cleaned[e.pos : e.pos + 10])
+            if "cleaned" in locals() and hasattr(e, "pos")
+            else None,
         }
     except Exception as e:
-        return {"status": "other_error", "error": str(e), "error_type": type(e).__name__}
+        return {
+            "status": "other_error",
+            "error": str(e),
+            "error_type": type(e).__name__,
+        }
 
 
 @app.post("/api/v1/debug/llm-raw", tags=["llm-testing"])
@@ -159,7 +170,9 @@ async def debug_llm_raw():
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post("http://localhost:11434/api/generate", json=payload) as response:
+            async with session.post(
+                "http://localhost:11434/api/generate", json=payload
+            ) as response:
                 if response.status == 200:
                     result = await response.json()
                     raw_response = result.get("response", "")
@@ -171,8 +184,12 @@ async def debug_llm_raw():
                         "response_length": len(raw_response),
                         "first_char": repr(raw_response[0]) if raw_response else None,
                         "contains_newlines": "\n" in raw_response,
-                        "starts_with_brace": raw_response.strip().startswith("{") if raw_response else False,
-                        "ends_with_brace": raw_response.strip().endswith("}") if raw_response else False,
+                        "starts_with_brace": raw_response.strip().startswith("{")
+                        if raw_response
+                        else False,
+                        "ends_with_brace": raw_response.strip().endswith("}")
+                        if raw_response
+                        else False,
                     }
                 else:
                     return {"status": "error", "code": response.status}
@@ -198,7 +215,11 @@ async def debug_normalizer_state():
             "imports_successful": True,
         }
     except Exception as e:
-        return {"imports_successful": False, "error": str(e), "error_type": type(e).__name__}
+        return {
+            "imports_successful": False,
+            "error": str(e),
+            "error_type": type(e).__name__,
+        }
 
 
 # Include routers with error handling
@@ -242,5 +263,15 @@ try:
 except Exception as e:
     print(f"❌ Failed to import LLM testing router: {e}")
 
+try:
+    from app.routers import test_mattermost
+
+    app.include_router(test_mattermost.router, prefix="/api/v1", tags=["chat"])
+    print("✅ Successfully included Mattermost testing router")
+except Exception as e:
+    print(f"❌ Failed to import Mattermost testing router: {e}")
+
 if __name__ == "__main__":
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True, log_level="info")
+    uvicorn.run(
+        "app.main:app", host="0.0.0.0", port=8000, reload=True, log_level="info"
+    )

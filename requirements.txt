@@ -39,5 +39,7 @@ black>=24.10.0
 isort>=5.13.0
 mypy>=1.13.0
 
+# Chat integration dependencies
 aiohttp>=3.8.0
 asyncio>=3.4.3
+websockets==11.0.2
