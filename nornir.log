@@ -7,3 +7,7 @@
 2025-07-20 17:10:12,093 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show interfaces status', 'read_timeout': 30} on 1 hosts
 2025-07-20 17:10:38,077 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show version', 'read_timeout': 30} on 1 hosts
 2025-07-20 17:11:11,238 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show mac address-table', 'read_timeout': 30} on 1 hosts
+2025-07-21 13:42:20,749 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show version', 'read_timeout': 30} on 1 hosts
+2025-07-21 13:43:28,076 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show ip bgp summary', 'read_timeout': 30} on 2 hosts
+2025-07-21 13:43:52,509 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show ip bgp summary', 'read_timeout': 30} on 1 hosts
+2025-07-21 13:44:17,104 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show ip bgp summary', 'read_timeout': 30} on 1 hosts

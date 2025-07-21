@@ -22,6 +22,19 @@ async def chat_health():
     return result
 
 
+@router.get("/status")
+async def chat_status():
+    """Get ChatOps handler status"""
+    from app.services.chat_handler import chat_handler
+
+    return {
+        "chat_handler_running": chat_handler.is_running,
+        "mattermost_connected": chat_handler.mattermost_client.bot_user_id is not None,
+        "websocket_connected": chat_handler.mattermost_client.websocket is not None,
+        "nlp_engine": "pattern_matching + llm_fallback",
+    }
+
+
 @router.get("/debug-env")
 async def debug_environment():
     """Debug environment variable loading"""

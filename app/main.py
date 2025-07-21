@@ -1,4 +1,6 @@
 # app/main.py
+import asyncio
+import json
 import logging
 import os
 import sys
@@ -33,12 +35,22 @@ async def lifespan(app: FastAPI):
     # Startup
     print("🚀 Starting NetOps ChatBot API...")
 
-    # Initialize LLM normalizer
+    # Initialize LLM normalizer (your existing code)
     llm_available = await enhanced_normalizer.initialize()
     if llm_available:
         print("✅ Local LLM initialized successfully")
     else:
         print("⚠️  Local LLM not available - using manual parsers only")
+
+    # NEW: Initialize ChatOps handler
+    try:
+        from app.services.chat_handler import chat_handler
+
+        # Start chat listening in background task
+        asyncio.create_task(chat_handler.start_listening())
+        print("✅ ChatOps handler started - listening for messages")
+    except Exception as e:
+        print(f"⚠️  ChatOps handler failed to start: {e}")
 
     print("🎯 NetOps ChatBot API ready!")
 
@@ -46,7 +58,13 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     print("🔄 Shutting down NetOps ChatBot API...")
-    # Add any cleanup logic here
+    # NEW: Stop chat handler
+    try:
+        from app.services.chat_handler import chat_handler
+
+        await chat_handler.stop_listening()
+    except Exception as e:
+        print(f"⚠️  Error stopping chat handler: {e}")
 
 
 app = FastAPI(
@@ -126,8 +144,6 @@ async def debug_json_parse():
         cleaned = local_llm_normalizer._clean_json_response(test_response)
 
         # Test JSON parsing
-        import json
-
         parsed = json.loads(cleaned)
 
         return {
