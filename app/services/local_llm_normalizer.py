@@ -5,7 +5,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 import aiohttp
 
@@ -30,6 +30,7 @@ class LocalLLMNormalizer:
     """
     Local LLM service for network command output normalization.
     Integrates with LM Studio running on Windows host.
+    Enhanced to support both NetworkIntent enums and dynamic string intents.
     """
 
     def __init__(
@@ -72,13 +73,22 @@ class LocalLLMNormalizer:
             logger.error(f"LLM health check failed: {e}")
             return False
 
+    def _get_intent_string(self, intent: Union[NetworkIntent, str]) -> str:
+        """Convert intent to string, handling both enum and string inputs"""
+        if isinstance(intent, NetworkIntent):
+            return intent.value
+        return str(intent)  # Handle dynamic discovery intents (strings)
+
     def _get_normalization_prompt(
-        self, intent: NetworkIntent, vendor: str, raw_output: str
+        self, intent: Union[NetworkIntent, str], vendor: str, raw_output: str
     ) -> str:
         """Generate intent-specific normalization prompt"""
 
+        # Convert intent to string for consistent processing
+        intent_str = self._get_intent_string(intent)
+
         # Cache key for prompt template
-        cache_key = f"{intent.value}_{vendor}"
+        cache_key = f"{intent_str}_{vendor}"
 
         if cache_key in self._prompt_cache:
             self.stats["cache_hits"] += 1
@@ -89,7 +99,9 @@ class LocalLLMNormalizer:
 
         return base_prompt.format(raw_output=raw_output)
 
-    def _generate_prompt_template(self, intent: NetworkIntent, vendor: str) -> str:
+    def _generate_prompt_template(
+        self, intent: Union[NetworkIntent, str], vendor: str
+    ) -> str:
         """Generate intent-specific prompt templates"""
 
         common_instructions = """
@@ -103,12 +115,41 @@ STRICT REQUIREMENTS:
 
 """
 
+        # Handle both enum and string intents
+        if isinstance(intent, NetworkIntent):
+            intent_key = intent
+        else:
+            # For dynamic discovery intents, try to map to known patterns
+            intent_str = intent.lower()
+            if (
+                "version" in intent_str
+                or "system" in intent_str
+                or "serial" in intent_str
+            ):
+                intent_key = NetworkIntent.GET_SYSTEM_VERSION
+            elif "interface" in intent_str:
+                intent_key = NetworkIntent.GET_INTERFACE_STATUS
+            elif "bgp" in intent_str:
+                intent_key = NetworkIntent.GET_BGP_SUMMARY
+            elif "arp" in intent_str:
+                intent_key = NetworkIntent.GET_ARP_TABLE
+            elif "mac" in intent_str:
+                intent_key = NetworkIntent.GET_MAC_TABLE
+            else:
+                intent_key = None
+
         intent_prompts = {
             NetworkIntent.GET_SYSTEM_VERSION: f"""
 {common_instructions}
 
-Convert this {vendor} version output to JSON with these fields:
+Convert this {vendor} version/system output to JSON with these fields:
 vendor, hostname, os_version, model, serial_number, uptime_seconds, memory_total_kb, memory_free_kb, last_reload_reason, confidence_score
+
+For serial number extraction, look for patterns like:
+- Serial number: ABC123
+- Serial Number: XYZ789
+- System serial number: DEF456
+- Hardware serial: GHI789
 
 Raw Output:
 {{raw_output}}
@@ -156,29 +197,40 @@ Raw Output:
 JSON:""",
         }
 
-        return intent_prompts.get(
-            intent,
-            f"""
+        if intent_key in intent_prompts:
+            return intent_prompts[intent_key]
+        else:
+            # Generic prompt for unknown dynamic intents
+            intent_display = self._get_intent_string(intent).replace("_", " ").title()
+            return f"""
 {common_instructions}
 
-Convert this {vendor} network command output to structured JSON format.
+Convert this {vendor} network command output to structured JSON format for: {intent_display}
+
+Analyze the output and extract relevant information into a well-structured JSON object.
+Include a confidence_score field (0.0-1.0) indicating how confident you are in the extraction.
 
 Raw Output:
 {{raw_output}}
 
-JSON:""",
-        )
+JSON:"""
 
     async def normalize_output(
-        self, raw_output: str, intent: NetworkIntent, vendor: str, command: str
+        self,
+        raw_output: str,
+        intent: Union[NetworkIntent, str],
+        vendor: str,
+        command: str,
     ) -> LLMNormalizationResult:
         """
         Normalize network command output using LM Studio LLM
+        Enhanced to support both NetworkIntent enums and dynamic string intents
         """
         start_time = time.time()
         self.stats["total_requests"] += 1
 
-        logger.info(f"Starting LLM normalization for {intent} on {vendor}")
+        intent_str = self._get_intent_string(intent)
+        logger.info(f"Starting LLM normalization for {intent_str} on {vendor}")
 
         try:
             # Generate normalization prompt

@@ -225,6 +225,69 @@ class NetworkExecutor:
             results=results,
         )
 
+    async def execute_multi_device_commands(
+        self, device_command_pairs: List[tuple]
+    ) -> dict:
+        """
+        Execute different commands on different devices
+        Takes a list of (device, command) tuples and returns a dict of {device: response}
+        """
+
+        logger.info(
+            f"Executing commands on {len(device_command_pairs)} device-command pairs"
+        )
+
+        results = {}
+
+        # Group commands by command to batch execution if possible
+        device_groups = {}
+        for device_obj, command in device_command_pairs:
+            if command not in device_groups:
+                device_groups[command] = []
+            device_groups[command].append(device_obj)
+
+        # Execute each unique command on its target devices
+        for command, devices in device_groups.items():
+            device_names = [device.name for device in devices]
+            logger.info(f"Executing '{command}' on devices: {device_names}")
+
+            # Use existing execute_command method
+            command_response = await self.execute_command(device_names, command)
+
+            # Convert CommandResponse results back to the format expected by intent executor
+            for device_result in command_response.results:
+                # Find the device object for this device name
+                device_obj = None
+                for device in devices:
+                    if device.name == device_result.device:
+                        device_obj = device
+                        break
+
+                if device_obj is None:
+                    logger.error(
+                        f"Could not find device object for {device_result.device}"
+                    )
+                    continue
+
+                # Create response object compatible with intent executor expectations
+                class DeviceResponse:
+                    def __init__(self, device_result: DeviceCommandResult):
+                        self.success = device_result.status == CommandStatus.SUCCESS
+                        self.raw_output = device_result.raw_output or ""
+                        self.command_executed = device_result.command
+                        self.execution_time = device_result.execution_time or 0.0
+                        self.error_message = device_result.error_message
+
+                # Now Device objects are hashable, so this will work
+                results[device_obj] = DeviceResponse(device_result)
+
+                logger.info(
+                    f"Device {device_result.device}: {'Success' if device_result.status == CommandStatus.SUCCESS else 'Failed'}"
+                )
+
+        logger.info(f"Multi-device execution completed - {len(results)} results")
+        return results
+
 
 # Global executor instance
 network_executor = NetworkExecutor()

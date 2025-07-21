@@ -25,7 +25,7 @@ class DeviceStatus(str, Enum):
 
 
 class Device(BaseModel):
-    """Device model matching your inventory structure"""
+    """Device model matching your inventory structure with hashability support"""
 
     name: str = Field(..., description="Device name/hostname")
     hostname: str = Field(..., description="Management IP address")
@@ -36,6 +36,24 @@ class Device(BaseModel):
     site: str = Field(..., description="Site location")
     vendor: str = Field(..., description="Device vendor")
     role: str = Field(..., description="Device role in network")
+
+    def __hash__(self):
+        """Make Device objects hashable using the device name as unique identifier"""
+        return hash(self.name)
+
+    def __eq__(self, other):
+        """Define equality based on device name"""
+        if isinstance(other, Device):
+            return self.name == other.name
+        return False
+
+    def __repr__(self):
+        """String representation for debugging"""
+        return f"Device(name='{self.name}', platform='{self.platform}', site='{self.site}')"
+
+    def __str__(self):
+        """Human-readable string representation"""
+        return f"{self.name} ({self.vendor} {self.device_type.value})"
 
     class Config:
         json_schema_extra = {

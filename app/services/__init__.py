@@ -1,24 +1,57 @@
 # app/services/__init__.py
-from .command_translator import CommandTranslator, command_translator
+"""
+Services module for NetOps ChatBot - Universal Pipeline Edition
+Permanent migration with proper fallback handling
+"""
+
+# Core working services (keeping these - they work)
+# Keep community_mapper (it's working and useful)
 from .community_mapper import CommunityCommandMapper, community_mapper
-from .enhanced_output_normalizer import enhanced_normalizer
 from .executor import NetworkExecutor, network_executor
-from .intent_executor import IntentExecutor, intent_executor
 from .inventory import InventoryService, inventory_service
 from .local_llm_normalizer import LocalLLMNormalizer, local_llm_normalizer
+from .mattermost_client import MattermostClient
+
+# enhanced_output_normalizer - handled in main.py with fallback
+# Don't import here to avoid import errors
+
+# Dynamic discovery (working)
+try:
+    from .dynamic_command_discovery import DynamicCommandDiscovery
+    # Note: dynamic_discovery instance is created in main.py
+except ImportError:
+    pass
+
+# Universal Pipeline services (new architecture)
+try:
+    from .intent_parser import IntentParser, intent_parser
+    from .universal_formatter import UniversalFormatter, universal_formatter
+    from .universal_request_processor import (
+        UniversalRequestProcessor,
+        universal_processor,
+    )
+except ImportError:
+    # These will be available once all files are created
+    pass
 
 __all__ = [
-    "inventory_service",
+    # Core services (keeping these)
     "InventoryService",
-    "network_executor",
+    "inventory_service",
     "NetworkExecutor",
-    "command_translator",
-    "CommandTranslator",
-    "intent_executor",
-    "IntentExecutor",
-    "community_mapper",
-    "CommunityCommandMapper",
-    "enhanced_normalizer",
-    "local_llm_normalizer",
+    "network_executor",
+    "MattermostClient",
     "LocalLLMNormalizer",
+    "local_llm_normalizer",
+    "CommunityCommandMapper",
+    "community_mapper",
+    # Dynamic discovery
+    "DynamicCommandDiscovery",
+    # Universal Pipeline (new)
+    "UniversalRequestProcessor",
+    "universal_processor",
+    "UniversalFormatter",
+    "universal_formatter",
+    "IntentParser",
+    "intent_parser",
 ]
