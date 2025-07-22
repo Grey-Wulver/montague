@@ -187,6 +187,11 @@ class NetworkExecutor:
                     )
                 else:
                     logger.info(f"Command succeeded on {device_name}")
+                    logger.info(f"DEBUG: Raw device output = '{result.result}'")
+                    logger.info(f"DEBUG: Raw output type = {type(result.result)}")
+                    logger.info(
+                        f"DEBUG: Raw output length = {len(result.result) if result.result else 'None'}"
+                    )
 
                     device_result = DeviceCommandResult(
                         device=device_name,

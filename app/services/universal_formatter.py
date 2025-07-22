@@ -90,7 +90,7 @@ class UniversalFormatter:
         )
 
         try:
-            # Build comprehensive context
+            # Build comprehensive context with enhanced preprocessing
             context = self._build_context(
                 user_request, intent, execution_results, discovery_results
             )
@@ -133,39 +133,59 @@ class UniversalFormatter:
         execution_results: Dict[str, DeviceExecutionResult],
         discovery_results: Dict[str, DiscoveryInfo],
     ) -> str:
-        """Build comprehensive context for LLM formatting"""
+        """Build comprehensive context for LLM formatting - INTENT-AGNOSTIC APPROACH"""
 
         context_parts = [
             f"User Request: {user_request}",
             f"Detected Intent: {intent}",
             f"Devices Processed: {len(execution_results)}",
             "",
+            "🎯 CRITICAL TASK: Analyze the user's specific request and the actual raw command output to determine what data to extract and present.",
+            "",
+            "📋 ANALYSIS INSTRUCTIONS:",
+            "1. READ the user's exact request - what specifically did they ask for?",
+            "2. EXAMINE the raw command output - what actual data is present?",
+            "3. MATCH the user request to the available data - extract what they asked for",
+            "4. If the user asked for 'configuration' but output shows 'neighbors' - say so clearly",
+            "5. If the user asked for 'neighbors' but output shows 'configuration' - say so clearly",
+            "",
         ]
 
-        # Add results for each device
+        # Add results for each device - NO PREPROCESSING, let LLM decide
         for device_name, result in execution_results.items():
-            context_parts.append(f"Device: {device_name}")
+            context_parts.append(f"=== DEVICE: {device_name} ===")
             context_parts.append(f"Platform: {result.platform}")
             context_parts.append(f"Command Executed: {result.command_executed}")
             context_parts.append(f"Success: {result.success}")
 
             if result.success and result.raw_output:
-                # Include raw output for LLM processing
-                context_parts.append(f"Raw Output:\n{result.raw_output}")
+                # DEBUG: Log what we're sending to LLM
+                logger.info(f"DEBUG FORMATTER: raw_output = '{result.raw_output}'")
+
+                # Include raw output WITHOUT preprocessing - let LLM analyze it
+                context_parts.append("Raw Command Output:")
+                context_parts.append(f"{result.raw_output}")
+
+                # Add general guidance instead of specific extraction hints
+                context_parts.append(
+                    "⚡ ANALYSIS GUIDANCE: Look at the raw output above and determine what type of data it contains. Extract the data that matches what the user specifically requested."
+                )
+
             elif not result.success:
-                context_parts.append(f"Error: {result.error_message}")
+                context_parts.append(f"❌ ERROR: {result.error_message}")
 
             context_parts.append("")  # Separator
 
         # Add discovery information
         if discovery_results:
-            context_parts.append("Discovery Information:")
+            context_parts.append("🔍 DISCOVERY INFORMATION:")
             for device_name, discovery in discovery_results.items():
                 context_parts.append(
-                    f"- {device_name}: '{discovery.discovered_command}' "
+                    f"• {device_name}: '{discovery.discovered_command}' "
                     f"(confidence: {discovery.confidence:.2f}, "
                     f"cached: {discovery.cached_result})"
                 )
+            context_parts.append("")
 
         return "\n".join(context_parts)
 
@@ -211,112 +231,154 @@ Based on what the user requested, provide the response in the specified format."
     def _get_chat_format_instructions(
         self, output_format: OutputFormat, options: Dict
     ) -> str:
-        """Chat-specific formatting instructions - ENHANCED TO SHOW ACTUAL DATA"""
+        """Chat-specific formatting instructions - SCALABLE NETWORK ENGINEERING APPROACH"""
 
         if output_format == OutputFormat.CONVERSATIONAL:
             return """
 
 Format: Professional conversational response for network engineers (PLAIN TEXT, NOT JSON)
 
-CRITICAL INSTRUCTIONS - SHOW ACTUAL DATA, NOT SUMMARIES:
+🧠 **YOU ARE AN EXPERT NETWORK ENGINEER** - Apply networking expertise to analyze and respond accurately.
 
-1. **WHEN USER ASKS TO "SHOW" SOMETHING - DISPLAY THE ACTUAL DATA/ENTRIES:**
-  - "show route table" → Show actual route entries (destination, next-hop, interface)
-  - "show interface statistics" → Show actual interface names with specific counters
-  - "show bgp neighbors" → Show actual neighbor IPs and their states
-  - "show version" → Show actual version numbers, uptime, serial numbers
+**CORE PRINCIPLES:**
+1. **ABSOLUTE GROUND TRUTH RULE**: You MUST ONLY report data that literally exists in the raw device output text
+2. **ZERO FABRICATION TOLERANCE**: NEVER create, invent, or suggest any network data (IPs, neighbors, interfaces, routes) that is not explicitly shown in the raw output
+3. **STATUS MESSAGE RECOGNITION**: Messages starting with % or # are status/error messages - explain them, don't try to extract data from them
+4. **TECHNICAL PRECISION**: Use accurate networking terminology based only on actual device responses
+5. **EXPLICIT DATA SOURCE**: Every technical detail must come directly from the raw output
 
-2. **EXTRACT AND DISPLAY REAL DATA FROM RAW OUTPUT:**
-  - Parse the raw command output and extract the actual entries/data
-  - Don't just describe what's in the output - show the actual content
-  - Present the real network data in a readable format
+**CRITICAL RULE FOR STATUS MESSAGES:**
+If the raw output contains "% BGP inactive", "% Command not found", "% Access denied", or similar:
+- This is a STATUS MESSAGE, not data
+- Do NOT create fake neighbors, routes, or configurations or any fabrications ever
+- Do NOT provide example data
+- ONLY explain what the status message means
+- Suggest alternative commands if appropriate
 
-3. **ROUTING TABLE SPECIFIC INSTRUCTIONS:**
-  - Show actual route entries: "10.0.0.0/24 via 192.168.1.1 dev Ethernet1"
-  - Include destination networks, next-hops, interfaces, metrics when available
-  - Group by route type (connected, static, OSPF, BGP) if clear from output
-  - Show actual routing protocol information
+**DATA EXTRACTION RULES:**
+- Real neighbor data looks like: "Neighbor 192.168.1.1  4  65001    123    456  never    Idle"
+- Real interface data looks like: "Ethernet1/1 is up, line protocol is up"
+- Real route data looks like: "10.0.0.0/24 is directly connected, Ethernet1/1"
+- If you don't see actual data like this, there IS NO DATA to show
 
-4. **INTERFACE STATISTICS SPECIFIC INSTRUCTIONS:**
-  - Show actual interface names: "Ethernet1/1", "GigabitEthernet0/0"
-  - Include real packet counts: "1,234,567 input packets, 987,654 output packets"
-  - Show error counts, bandwidth utilization, interface status
-  - List multiple interfaces with their individual statistics
+**ANALYSIS WORKFLOW:**
 
-5. **BGP SPECIFIC INSTRUCTIONS:**
-  - Show actual neighbor IP addresses and their states
-  - Include prefix counts, BGP session states, AS numbers when available
-  - Display real BGP table information if requested
+**Step 1: Parse User Intent**
+- What specific information is the user requesting?
+- Are they asking for: status, configuration, statistics, troubleshooting, or analysis?
+- What level of technical detail do they expect?
 
-6. **VERSION/SYSTEM INFO INSTRUCTIONS:**
-  - Show actual version numbers, build dates, uptime values
-  - Include real serial numbers, model numbers, memory/CPU specs
-  - Display actual system information, not just "version info available"
+**Step 2: Examine Raw Output**
+- What type of data is actually present?
+- Is it structured data (tables, configs) or status messages?
+- Are there error indicators (%, #, warnings, failures)?
 
-RESPONSE STRUCTURE:
-- Start with what was found: "Here's the routing table for spine1:"
-- Show the actual data in organized format
-- Use professional but friendly tone
-- RETURN ONLY THE CONVERSATIONAL TEXT, NO JSON WRAPPER
+**Step 3: Match Request to Reality**
+- Does the output contain what the user asked for?
+- If yes → Extract and present it clearly
+- If no → Explain what's actually present vs what was requested
+- If partial → Show available data and note what's missing
 
-EXAMPLES OF CORRECT RESPONSES:
+**DEVICE OUTPUT INTERPRETATION:**
 
-Route Table Request:
-"Here's the routing table for spine1:
+**Status Messages** (% prefix, error messages):
+- Recognize these as system status, not data
+- Explain what the status means in networking terms
+- Suggest next steps if appropriate
 
-Connected Routes:
-- 10.0.0.0/24 via Ethernet1/1 (directly connected)
-- 192.168.1.0/24 via Ethernet1/2 (directly connected)
+**Configuration Data** (config syntax, parameters):
+- Present actual config lines or settings
+- Explain key parameters if relevant to user's question
+- Maintain hierarchical structure
 
-Static Routes:
-- 172.16.0.0/16 via 10.0.0.1 (Ethernet1/1)
-- 0.0.0.0/0 via 192.168.1.1 (default route)
+**Operational Data** (statistics, states, tables):
+- Extract specific values, counters, or states
+- Present in organized, readable format
+- Include units and context where relevant
 
-OSPF Routes:
-- 10.1.0.0/24 via 10.0.0.2 [110/20]
-- 10.2.0.0/24 via 10.0.0.3 [110/30]"
+**RESPONSE CONSTRUCTION:**
 
-Interface Statistics Request:
-"Here are the interface statistics for spine1:
+**Professional Opening**: "Here's [what you found] for [device]:"
 
-Ethernet1/1: UP - 1,234,567 input packets, 987,654 output packets, 0 input errors, 0 output errors
-Ethernet1/2: UP - 2,345,678 input packets, 1,876,543 output packets, 0 input errors, 0 output errors
-Ethernet1/3: DOWN - admin down
-Management1: UP - 45,123 input packets, 23,456 output packets"
+**Data Presentation**:
+- Use bullet points (•) for lists
+- Use clear hierarchical structure
+- Include specific values, not just summaries
+- Group related information logically
 
-EXAMPLES OF BAD RESPONSES TO AVOID:
-- "The routing table has 25 entries" (WRONG - show the actual entries)
-- "Interface summary: 24 interfaces up" (WRONG - show actual interface data)
-- "BGP is running normally" (WRONG - show actual neighbor states)
-- "Version information is available" (WRONG - show the actual version)
+**Technical Accuracy**:
+- Use proper interface names, IP addresses, protocol states
+- Include relevant technical details (AS numbers, metrics, timers)
+- Be precise about quantities and states
 
-REMEMBER: Users want to see the ACTUAL NETWORK DATA, not descriptions of the data!
+**Clear Communication**:
+- Start with direct answer to user's question
+- Use networking terminology appropriately
+- Explain status conditions clearly
+
+**EXAMPLE RESPONSE PATTERNS:**
+
+**For Status Messages**:
+"BGP is not currently running on spine1. The device returned '% BGP inactive', which means the BGP routing process is not configured or enabled. To check BGP configuration, you could try 'show running-config section bgp'."
+
+**For Actual Data**:
+"Here are the active interfaces on spine1:
+• Ethernet1/1: UP, 1.2M packets in/987K packets out, 0 errors
+• Management1: UP, 45K packets in/23K packets out, 0 errors
+• Ethernet1/2: DOWN (admin down)"
+
+**For Mismatched Requests**:
+"You requested BGP configuration, but the command returned neighbor status information instead. Here's what the output shows: [actual data]. For BGP configuration, try asking for 'show running-config bgp'."
+
+**EXPERT GUIDELINES:**
+
+✅ **Always Do:**
+- Report actual device state accurately
+- Explain networking concepts when relevant
+- Use specific technical values from output
+- Be clear about what data is/isn't available
+- Maintain professional but approachable tone
+
+❌ **Never Do:**
+- Fabricate network data not in the output
+- Give generic summaries without specific information
+- Ignore error messages or status indicators
+- Make assumptions about network state
+- Use overly complex explanations for simple requests
+
+**Remember: You are a knowledgeable network engineer helping a colleague. Be accurate, helpful, and technically sound.**
 """
 
         elif output_format == OutputFormat.JSON:
             return """
 
-Format: Clean JSON for chat display
-- Return valid JSON object
-- Include only requested information
-- Add "chat_friendly" field with human-readable summary
-- Include discovery info if applicable
+Format: Clean JSON for chat display - Network Engineer Focused
+- Return valid JSON object with extracted technical data
+- Include "status" field indicating data type (data/status/error)
+- Add "technical_summary" for network engineer context
+- Structure data appropriately for network information
 
 Example:
 {
- "result": "Serial Number: ABC123",
- "chat_friendly": "Found serial number ABC123 on spine1",
- "discovery_used": true
+ "status": "inactive_service",
+ "technical_summary": "BGP routing process not running on spine1",
+ "raw_message": "% BGP inactive",
+ "suggested_action": "Check BGP configuration with 'show running-config section bgp'",
+ "device_context": {
+   "device": "spine1",
+   "platform": "arista_eos",
+   "service_queried": "bgp"
+ }
 }
 """
 
         else:
-            return f"\n\nFormat: {output_format.value} suitable for chat display"
+            return f"\n\nFormat: {output_format.value} suitable for network engineering chat display with technical accuracy"
 
     def _get_api_format_instructions(
         self, output_format: OutputFormat, options: Dict
     ) -> str:
-        """API-specific formatting instructions"""
+        """API-specific formatting instructions - ENHANCED FOR ACTUAL DATA"""
 
         if output_format == OutputFormat.JSON:
             return """
@@ -325,7 +387,7 @@ Format: Structured JSON for API consumption
 - Return clean, consistent JSON structure
 - Use standard field names (snake_case)
 - Include metadata (success, device_count, execution_time)
-- Include all relevant extracted data
+- EXTRACT AND STRUCTURE ALL ACTUAL DATA from raw output
 - Provide arrays for multi-device responses
 
 Example structure:
@@ -334,12 +396,28 @@ Example structure:
  "devices": [
    {
      "device": "spine1",
-     "result": {...extracted data...},
+     "platform": "arista_eos",
+     "command_executed": "show ip route",
+     "success": true,
+     "extracted_data": {
+       "routes": [
+         {
+           "destination": "10.0.0.0/24",
+           "next_hop": "192.168.1.1",
+           "interface": "Ethernet1/1",
+           "route_type": "connected"
+         }
+       ]
+     },
      "discovery_used": true
    }
  ],
- "summary": "Brief summary",
- "execution_metadata": {...}
+ "summary": "Retrieved 25 routes from spine1",
+ "execution_metadata": {
+   "total_devices": 1,
+   "successful_devices": 1,
+   "total_execution_time": "2.34s"
+ }
 }
 """
 
@@ -351,6 +429,7 @@ Format: Clean YAML structure
 - Include consistent indentation
 - Provide clear hierarchy
 - Include comments where helpful
+- EXTRACT ACTUAL DATA and structure hierarchically
 """
 
         elif output_format == OutputFormat.XML:
@@ -361,15 +440,16 @@ Format: Well-formed XML
 - Include proper XML declaration
 - Nest data logically
 - Include attributes for metadata
+- EXTRACT ACTUAL DATA into structured XML elements
 """
 
         else:
-            return f"\n\nFormat: {output_format.value} for API consumption"
+            return f"\n\nFormat: {output_format.value} for API consumption with actual data extraction"
 
     def _get_cli_format_instructions(
         self, output_format: OutputFormat, options: Dict
     ) -> str:
-        """CLI-specific formatting instructions"""
+        """CLI-specific formatting instructions - ENHANCED FOR ACTUAL DATA"""
 
         if output_format == OutputFormat.TABLE:
             return """
@@ -377,14 +457,22 @@ Format: Well-formed XML
 Format: ASCII table for CLI display
 - Create clean, aligned tables with headers
 - Use consistent column spacing
-- Include only most relevant data
+- EXTRACT ACTUAL DATA and display in tabular format
 - Limit width to ~80 characters
 - Use | for column separators
 
-Example:
-| Device | Serial Number      | Status |
-|--------|--------------------|--------|
-| spine1 | ABC123456789       | Up     |
+Example (Interface Statistics):
+| Interface   | Status | Input Pkts | Output Pkts | Input Errors |
+|-------------|--------|------------|-------------|--------------|
+| Ethernet1/1 | UP     | 1,234,567  | 987,654     | 0            |
+| Ethernet1/2 | UP     | 2,345,678  | 1,876,543   | 3            |
+| Management1 | UP     | 45,123     | 23,456      | 0            |
+
+Example (Route Table):
+| Destination  | Next Hop      | Interface   | Type      |
+|--------------|---------------|-------------|-----------|
+| 10.0.0.0/24  | 192.168.1.1   | Ethernet1/1 | Connected |
+| 172.16.0.0/16| 10.0.0.1      | Ethernet1/1 | Static    |
 """
 
         elif output_format == OutputFormat.CSV:
@@ -395,15 +483,21 @@ Format: CSV for CLI export
 - Use comma separation
 - Escape special characters
 - One line per device/result
+- EXTRACT ACTUAL DATA into CSV format
+
+Example:
+Device,Interface,Status,InputPackets,OutputPackets,InputErrors
+spine1,Ethernet1/1,UP,1234567,987654,0
+spine1,Ethernet1/2,UP,2345678,1876543,3
 """
 
         else:
-            return f"\n\nFormat: {output_format.value} for command line display"
+            return f"\n\nFormat: {output_format.value} for command line display with actual data"
 
     def _get_web_format_instructions(
         self, output_format: OutputFormat, options: Dict
     ) -> str:
-        """Web UI-specific formatting instructions"""
+        """Web UI-specific formatting instructions - ENHANCED FOR ACTUAL DATA"""
 
         if output_format == OutputFormat.HTML:
             return """
@@ -414,12 +508,21 @@ Format: HTML for web display
 - Create tables for structured data
 - Use badges/alerts for status indicators
 - Make it responsive and accessible
+- EXTRACT ACTUAL DATA and present in structured HTML
 
 Example:
 <div class="device-result">
- <h3>spine1</h3>
- <span class="badge success">Success</span>
- <p>Serial Number: <code>ABC123</code></p>
+ <h3>spine1 <span class="badge badge-success">Connected</span></h3>
+
+ <h4>Interface Statistics</h4>
+ <table class="table table-striped">
+   <thead>
+     <tr><th>Interface</th><th>Status</th><th>Input Packets</th><th>Output Packets</th></tr>
+   </thead>
+   <tbody>
+     <tr><td>Ethernet1/1</td><td><span class="badge badge-success">UP</span></td><td>1,234,567</td><td>987,654</td></tr>
+   </tbody>
+ </table>
 </div>
 """
 
@@ -431,25 +534,50 @@ Format: Markdown for web/documentation
 - Include headers, lists, code blocks
 - Create tables where appropriate
 - Use emphasis for important data
+- EXTRACT ACTUAL DATA and format in markdown
+
+Example:
+# Network Data for spine1
+
+## Interface Statistics
+
+| Interface | Status | Input Packets | Output Packets |
+|-----------|--------|---------------|----------------|
+| Ethernet1/1 | **UP** | 1,234,567 | 987,654 |
+| Ethernet1/2 | **UP** | 2,345,678 | 1,876,543 |
+
+## Route Table
+
+- **10.0.0.0/24** via 192.168.1.1 (Ethernet1/1) - Connected
+- **172.16.0.0/16** via 10.0.0.1 (Ethernet1/1) - Static
 """
 
         else:
-            return f"\n\nFormat: {output_format.value} for web display"
+            return f"\n\nFormat: {output_format.value} for web display with actual data extraction"
 
     async def _format_with_llm_direct(
         self, prompt: str, output_format: OutputFormat
     ) -> Any:
-        """Direct LLM call optimized for each output format"""
+        """Direct LLM call optimized for maximum consistency and detailed responses"""
 
         try:
             import aiohttp
 
+            # Optimized parameters for consistency and detailed responses
             payload = {
                 "model": self.model_name,
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.05,  # LOWERED: Much more deterministic for consistency
-                "max_tokens": 4000,  # INCREASED: More tokens for detailed actual data
+                # Consistency optimizations
+                "temperature": 0.01,  # EVEN LOWER: Maximum determinism
+                "top_p": 0.9,  # Focus on high-probability tokens
+                "top_k": 40,  # Limit token choices for consistency
+                "repeat_penalty": 1.1,  # Avoid repetitive text
+                # Token optimizations
+                "max_tokens": 4000,  # INCREASED: More room for detailed data
+                "min_tokens": 150,  # Ensure substantial responses
+                # Response control
                 "stream": False,
+                "stop": ["Human:", "Assistant:", "```"],  # Stop at common break points
             }
 
             timeout = aiohttp.ClientTimeout(total=self.timeout)
@@ -468,25 +596,25 @@ Format: Markdown for web/documentation
                                 choices[0].get("message", {}).get("content", "").strip()
                             )
 
+                            # Post-process response for better consistency
+                            llm_response = self._post_process_response(
+                                llm_response, output_format
+                            )
+
                             # Handle response based on expected format
                             if output_format == OutputFormat.CONVERSATIONAL:
-                                # Return plain text directly
                                 return llm_response
 
                             elif output_format == OutputFormat.JSON:
-                                # Try to parse as JSON, fallback to wrapped response
                                 try:
-                                    # Clean and parse JSON
                                     cleaned_json = self._clean_json_response(
                                         llm_response
                                     )
                                     return json.loads(cleaned_json)
                                 except json.JSONDecodeError:
-                                    # Wrap plain text in JSON structure
                                     return {"formatted_response": llm_response}
 
                             else:
-                                # For other formats (table, csv, etc.), return as-is
                                 return llm_response
 
                     # If HTTP request failed
@@ -497,6 +625,52 @@ Format: Markdown for web/documentation
         except Exception as e:
             logger.error(f"Direct LLM call failed: {e}")
             raise ValueError("LLM formatting failed - no response") from e
+
+    def _post_process_response(self, response: str, output_format: OutputFormat) -> str:
+        """Post-process LLM response for better consistency"""
+
+        # Remove common inconsistencies
+        response = response.strip()
+
+        # Remove any JSON wrapper if this should be conversational
+        if output_format == OutputFormat.CONVERSATIONAL:
+            # Remove JSON markers that sometimes appear
+            if response.startswith("```json") and response.endswith("```"):
+                response = response[7:-3].strip()
+            elif response.startswith("{") and response.endswith("}"):
+                # Try to extract text from JSON
+                try:
+                    data = json.loads(response)
+                    if isinstance(data, dict):
+                        # Look for common text fields
+                        for field in [
+                            "response",
+                            "result",
+                            "message",
+                            "content",
+                            "formatted_response",
+                        ]:
+                            if field in data and isinstance(data[field], str):
+                                response = data[field]
+                                break
+                except (json.JSONDecodeError, KeyError, TypeError):
+                    pass  # Keep original response if JSON parsing fails
+
+        # Ensure proper formatting for network data
+        if "Here" not in response and any(
+            device in response.lower()
+            for device in ["spine", "leaf", "switch", "router"]
+        ):
+            # Add a proper intro if missing
+            response = f"Here's the requested information:\n\n{response}"
+
+        # Clean up common formatting issues
+        response = response.replace("\\n", "\n")  # Fix escaped newlines
+        response = "\n".join(
+            line.strip() for line in response.split("\n")
+        )  # Clean spacing
+
+        return response
 
     def _clean_json_response(self, response_text: str) -> str:
         """Clean JSON response from LLM (simplified version)"""

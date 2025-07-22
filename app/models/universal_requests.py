@@ -69,7 +69,7 @@ class UniversalRequest(BaseModel):
     timeout: int = Field(default=30, ge=1, le=300)
     allow_discovery: bool = Field(default=True)
     force_fresh_discovery: bool = Field(default=False)
-    include_raw_output: bool = Field(default=False)
+    include_raw_output: bool = Field(default=True)
 
     # Context and memory
     conversation_context: Optional[Dict[str, Any]] = Field(default=None)
@@ -240,7 +240,7 @@ class APIRequest(UniversalRequest):
 
     interface_type: InterfaceType = InterfaceType.API
     output_format: OutputFormat = OutputFormat.JSON
-    include_raw_output: bool = False
+    include_raw_output: bool = True
 
 
 class CLIRequest(UniversalRequest):
