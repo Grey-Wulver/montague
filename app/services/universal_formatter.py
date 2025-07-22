@@ -1,6 +1,6 @@
 # app/services/universal_formatter.py
 """
-Universal Formatter - LLM-Powered Response Formatting (ENHANCED FOR NETWORK ENGINEERS)
+Universal Formatter - LLM-Powered Response Formatting (ENHANCED FOR SHOWING ACTUAL DATA)
 Replaces ALL hardcoded normalization and extraction logic
 Uses LLM to format responses for ANY interface in ANY format
 """
@@ -211,40 +211,86 @@ Based on what the user requested, provide the response in the specified format."
     def _get_chat_format_instructions(
         self, output_format: OutputFormat, options: Dict
     ) -> str:
-        """Chat-specific formatting instructions - ENHANCED FOR NETWORK ENGINEERS"""
+        """Chat-specific formatting instructions - ENHANCED TO SHOW ACTUAL DATA"""
 
         if output_format == OutputFormat.CONVERSATIONAL:
             return """
 
 Format: Professional conversational response for network engineers (PLAIN TEXT, NOT JSON)
 
-CRITICAL INSTRUCTIONS FOR NETWORK DATA:
-1. ALWAYS extract and show specific technical details from the raw output
-2. NEVER say "no specific data" if interface details exist in raw output
-3. Include specific interface names (Ethernet1/1, GigabitEthernet0/0, etc.)
-4. Show actual packet counts, bandwidth utilization, error counts when available
-5. Mention interface status (up/down, admin up/down)
-6. Extract meaningful metrics (bytes, packets, errors, drops)
-7. Be specific - network engineers need precise technical information
+CRITICAL INSTRUCTIONS - SHOW ACTUAL DATA, NOT SUMMARIES:
+
+1. **WHEN USER ASKS TO "SHOW" SOMETHING - DISPLAY THE ACTUAL DATA/ENTRIES:**
+  - "show route table" → Show actual route entries (destination, next-hop, interface)
+  - "show interface statistics" → Show actual interface names with specific counters
+  - "show bgp neighbors" → Show actual neighbor IPs and their states
+  - "show version" → Show actual version numbers, uptime, serial numbers
+
+2. **EXTRACT AND DISPLAY REAL DATA FROM RAW OUTPUT:**
+  - Parse the raw command output and extract the actual entries/data
+  - Don't just describe what's in the output - show the actual content
+  - Present the real network data in a readable format
+
+3. **ROUTING TABLE SPECIFIC INSTRUCTIONS:**
+  - Show actual route entries: "10.0.0.0/24 via 192.168.1.1 dev Ethernet1"
+  - Include destination networks, next-hops, interfaces, metrics when available
+  - Group by route type (connected, static, OSPF, BGP) if clear from output
+  - Show actual routing protocol information
+
+4. **INTERFACE STATISTICS SPECIFIC INSTRUCTIONS:**
+  - Show actual interface names: "Ethernet1/1", "GigabitEthernet0/0"
+  - Include real packet counts: "1,234,567 input packets, 987,654 output packets"
+  - Show error counts, bandwidth utilization, interface status
+  - List multiple interfaces with their individual statistics
+
+5. **BGP SPECIFIC INSTRUCTIONS:**
+  - Show actual neighbor IP addresses and their states
+  - Include prefix counts, BGP session states, AS numbers when available
+  - Display real BGP table information if requested
+
+6. **VERSION/SYSTEM INFO INSTRUCTIONS:**
+  - Show actual version numbers, build dates, uptime values
+  - Include real serial numbers, model numbers, memory/CPU specs
+  - Display actual system information, not just "version info available"
 
 RESPONSE STRUCTURE:
-- Start with a brief summary of what was found
-- List specific findings per device
-- Include technical details that matter to network engineers
+- Start with what was found: "Here's the routing table for spine1:"
+- Show the actual data in organized format
 - Use professional but friendly tone
 - RETURN ONLY THE CONVERSATIONAL TEXT, NO JSON WRAPPER
 
-EXAMPLES OF GOOD RESPONSES:
-- "Interface statistics for your devices show: spine1 has Ethernet1/1 up with 1.2M input packets and 890K output packets, Ethernet1/2 up with 2.4M input packets..."
-- "BGP neighbors on spine1: 10.1.1.1 (established, 50 prefixes), 10.1.1.2 (idle), 10.1.1.3 (established, 25 prefixes)"
-- "Version information: spine1 running EOS 4.25.4M, leaf1 running EOS 4.24.6M, all devices have uptime over 30 days"
+EXAMPLES OF CORRECT RESPONSES:
+
+Route Table Request:
+"Here's the routing table for spine1:
+
+Connected Routes:
+- 10.0.0.0/24 via Ethernet1/1 (directly connected)
+- 192.168.1.0/24 via Ethernet1/2 (directly connected)
+
+Static Routes:
+- 172.16.0.0/16 via 10.0.0.1 (Ethernet1/1)
+- 0.0.0.0/0 via 192.168.1.1 (default route)
+
+OSPF Routes:
+- 10.1.0.0/24 via 10.0.0.2 [110/20]
+- 10.2.0.0/24 via 10.0.0.3 [110/30]"
+
+Interface Statistics Request:
+"Here are the interface statistics for spine1:
+
+Ethernet1/1: UP - 1,234,567 input packets, 987,654 output packets, 0 input errors, 0 output errors
+Ethernet1/2: UP - 2,345,678 input packets, 1,876,543 output packets, 0 input errors, 0 output errors
+Ethernet1/3: DOWN - admin down
+Management1: UP - 45,123 input packets, 23,456 output packets"
 
 EXAMPLES OF BAD RESPONSES TO AVOID:
-- "Interface summary: 24 interfaces up, 0 down. No specific data to highlight."
-- "All normal, no issues reported."
-- "The devices are working fine."
+- "The routing table has 25 entries" (WRONG - show the actual entries)
+- "Interface summary: 24 interfaces up" (WRONG - show actual interface data)
+- "BGP is running normally" (WRONG - show actual neighbor states)
+- "Version information is available" (WRONG - show the actual version)
 
-ALWAYS BE SPECIFIC WITH NETWORK DATA - Extract real interface names, real numbers, real status information from the raw output.
+REMEMBER: Users want to see the ACTUAL NETWORK DATA, not descriptions of the data!
 """
 
         elif output_format == OutputFormat.JSON:
@@ -258,9 +304,9 @@ Format: Clean JSON for chat display
 
 Example:
 {
-  "result": "Serial Number: ABC123",
-  "chat_friendly": "Found serial number ABC123 on spine1",
-  "discovery_used": true
+ "result": "Serial Number: ABC123",
+ "chat_friendly": "Found serial number ABC123 on spine1",
+ "discovery_used": true
 }
 """
 
@@ -284,16 +330,16 @@ Format: Structured JSON for API consumption
 
 Example structure:
 {
-  "success": true,
-  "devices": [
-    {
-      "device": "spine1",
-      "result": {...extracted data...},
-      "discovery_used": true
-    }
-  ],
-  "summary": "Brief summary",
-  "execution_metadata": {...}
+ "success": true,
+ "devices": [
+   {
+     "device": "spine1",
+     "result": {...extracted data...},
+     "discovery_used": true
+   }
+ ],
+ "summary": "Brief summary",
+ "execution_metadata": {...}
 }
 """
 
@@ -371,9 +417,9 @@ Format: HTML for web display
 
 Example:
 <div class="device-result">
-  <h3>spine1</h3>
-  <span class="badge success">Success</span>
-  <p>Serial Number: <code>ABC123</code></p>
+ <h3>spine1</h3>
+ <span class="badge success">Success</span>
+ <p>Serial Number: <code>ABC123</code></p>
 </div>
 """
 
@@ -401,8 +447,8 @@ Format: Markdown for web/documentation
             payload = {
                 "model": self.model_name,
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.2,  # CHANGED: Slightly higher for more detailed responses
-                "max_tokens": 1500,  # CHANGED: More tokens for detailed network info
+                "temperature": 0.05,  # LOWERED: Much more deterministic for consistency
+                "max_tokens": 4000,  # INCREASED: More tokens for detailed actual data
                 "stream": False,
             }
 
