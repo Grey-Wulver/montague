@@ -1,8 +1,8 @@
 # app/services/universal_request_processor.py
 """
-Universal Request Processor - The Core Engine (FIXED)
+Universal Request Processor - The Core Engine (ENHANCED WITH LLM)
 Processes ALL requests regardless of interface (Chat, API, CLI, Web)
-Replaces intent_executor.py with a more powerful, universal approach
+Now uses pure LLM understanding for intent parsing
 """
 
 import logging
@@ -25,6 +25,7 @@ class UniversalRequestProcessor:
     """
     The ONE engine that processes ALL network automation requests
     Chat, API, CLI, Web - all interfaces use this same pipeline
+    NOW WITH PURE LLM UNDERSTANDING!
     """
 
     def __init__(self):
@@ -53,17 +54,23 @@ class UniversalRequestProcessor:
             # Import services
             from app.services.dynamic_command_discovery import dynamic_discovery
             from app.services.executor import network_executor
-            from app.services.intent_parser import intent_parser
             from app.services.inventory import inventory_service
+            from app.services.pure_llm_intent_parser import (
+                create_enhanced_intent_parser,  # CHANGED: Use LLM intent parser
+            )
             from app.services.universal_formatter import universal_formatter
 
             self._dynamic_discovery = dynamic_discovery
             self._network_executor = network_executor
             self._inventory_service = inventory_service
-            self._intent_parser = intent_parser
+            self._intent_parser = (
+                create_enhanced_intent_parser()
+            )  # CHANGED: Use LLM intent parser
             self._universal_formatter = universal_formatter
 
-            logger.info("✅ Universal Request Processor initialized successfully")
+            logger.info(
+                "✅ Universal Request Processor initialized successfully with LLM intent understanding"
+            )
             return True
 
         except ImportError as e:
@@ -73,7 +80,7 @@ class UniversalRequestProcessor:
     async def process_request(self, request: UniversalRequest) -> UniversalResponse:
         """
         THE MAIN PIPELINE: Process any request from any interface
-        This is the heart of the universal system
+        This is the heart of the universal system - NOW WITH LLM UNDERSTANDING!
         """
         start_time = time.time()
         self.stats["total_requests"] += 1
@@ -86,7 +93,7 @@ class UniversalRequestProcessor:
             # Validate request
             validate_request_size(request)
 
-            # 1. Parse Intent and Extract Devices
+            # 1. Parse Intent and Extract Devices (NOW USES LLM!)
             intent, resolved_devices = await self._parse_and_resolve_request(request)
 
             # 2. Discover Commands for Each Device
@@ -138,13 +145,23 @@ class UniversalRequestProcessor:
     async def _parse_and_resolve_request(
         self, request: UniversalRequest
     ) -> Tuple[str, List[Any]]:
-        """Parse user input and resolve devices"""
+        """Parse user input and resolve devices - NOW WITH PURE LLM UNDERSTANDING!"""
 
-        # Parse intent from natural language
+        logger.info(f"🧠 Using LLM to understand user intent: '{request.user_input}'")
+
+        # Use LLM to parse intent from natural language - NO PATTERN MATCHING!
         intent = await self._intent_parser.extract_intent(request.user_input)
 
-        # Resolve device list
-        device_names = validate_devices(request.devices)
+        # Use LLM to extract devices from natural language
+        llm_devices = await self._intent_parser.extract_devices(request.user_input)
+
+        # Combine with any explicitly provided devices
+        if request.devices:
+            device_names = validate_devices(request.devices)
+        else:
+            device_names = llm_devices
+
+        logger.info(f"🎯 LLM Intent: '{intent}' | LLM Devices: {device_names}")
 
         # Handle "all" devices
         if "all" in device_names:
@@ -165,7 +182,7 @@ class UniversalRequestProcessor:
             raise ValueError("No valid devices found")
 
         logger.info(
-            f"🎯 Intent: '{intent}' | Devices: {[d.name for d in resolved_devices]}"
+            f"🎯 Final Intent: '{intent}' | Final Devices: {[d.name for d in resolved_devices]}"
         )
 
         return intent, resolved_devices
@@ -390,6 +407,7 @@ class UniversalRequestProcessor:
                 "interface_type": request.interface_type.value,
                 "output_format": request.output_format.value,
                 "intent": intent,
+                "llm_enhanced": True,  # NEW: Flag to indicate LLM processing
             },
         )
 
@@ -426,6 +444,7 @@ class UniversalRequestProcessor:
             "success_rate_percent": round(success_rate, 2),
             "cache_hit_rate_percent": round(cache_hit_rate, 2),
             "total_discoveries_with_cache": total_discoveries,
+            "llm_enhanced": True,
         }
 
     async def health_check(self) -> Dict[str, Any]:
@@ -464,6 +483,12 @@ class UniversalRequestProcessor:
                 )
             else:
                 health_status["services"]["llm_formatter"] = "not_initialized"
+
+            # Check LLM intent parser
+            if self._intent_parser:
+                health_status["services"]["llm_intent_parser"] = "healthy"
+            else:
+                health_status["services"]["llm_intent_parser"] = "not_initialized"
 
         except Exception as e:
             health_status["universal_processor"] = f"error: {str(e)}"

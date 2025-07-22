@@ -1,6 +1,6 @@
 # app/services/universal_formatter.py
 """
-Universal Formatter - LLM-Powered Response Formatting (FIXED)
+Universal Formatter - LLM-Powered Response Formatting (ENHANCED FOR NETWORK ENGINEERS)
 Replaces ALL hardcoded normalization and extraction logic
 Uses LLM to format responses for ANY interface in ANY format
 """
@@ -178,7 +178,7 @@ class UniversalFormatter:
     ) -> str:
         """Build format-specific prompts for different interfaces"""
 
-        base_prompt = f"""You are a network automation assistant. Here's the execution context:
+        base_prompt = f"""You are a network automation assistant helping network engineers. Here's the execution context:
 
 {context}
 
@@ -211,23 +211,40 @@ Based on what the user requested, provide the response in the specified format."
     def _get_chat_format_instructions(
         self, output_format: OutputFormat, options: Dict
     ) -> str:
-        """Chat-specific formatting instructions"""
+        """Chat-specific formatting instructions - ENHANCED FOR NETWORK ENGINEERS"""
 
         if output_format == OutputFormat.CONVERSATIONAL:
             return """
 
-Format: Natural, conversational response (PLAIN TEXT, NOT JSON)
-- Be concise but complete
-- If user asked for specific data (like serial number), highlight it clearly
-- Use friendly, professional tone
-- Include key information they requested
-- Mention if discovery was used (AI learned new command)
+Format: Professional conversational response for network engineers (PLAIN TEXT, NOT JSON)
+
+CRITICAL INSTRUCTIONS FOR NETWORK DATA:
+1. ALWAYS extract and show specific technical details from the raw output
+2. NEVER say "no specific data" if interface details exist in raw output
+3. Include specific interface names (Ethernet1/1, GigabitEthernet0/0, etc.)
+4. Show actual packet counts, bandwidth utilization, error counts when available
+5. Mention interface status (up/down, admin up/down)
+6. Extract meaningful metrics (bytes, packets, errors, drops)
+7. Be specific - network engineers need precise technical information
+
+RESPONSE STRUCTURE:
+- Start with a brief summary of what was found
+- List specific findings per device
+- Include technical details that matter to network engineers
+- Use professional but friendly tone
 - RETURN ONLY THE CONVERSATIONAL TEXT, NO JSON WRAPPER
 
-Examples:
-- "Serial Number: ABC123 (AI discovered this from show version)"
-- "BGP Status: 3/4 neighbors established on spine1"
-- "Interface Summary: 12 interfaces up, 2 down on leaf1"
+EXAMPLES OF GOOD RESPONSES:
+- "Interface statistics for your devices show: spine1 has Ethernet1/1 up with 1.2M input packets and 890K output packets, Ethernet1/2 up with 2.4M input packets..."
+- "BGP neighbors on spine1: 10.1.1.1 (established, 50 prefixes), 10.1.1.2 (idle), 10.1.1.3 (established, 25 prefixes)"
+- "Version information: spine1 running EOS 4.25.4M, leaf1 running EOS 4.24.6M, all devices have uptime over 30 days"
+
+EXAMPLES OF BAD RESPONSES TO AVOID:
+- "Interface summary: 24 interfaces up, 0 down. No specific data to highlight."
+- "All normal, no issues reported."
+- "The devices are working fine."
+
+ALWAYS BE SPECIFIC WITH NETWORK DATA - Extract real interface names, real numbers, real status information from the raw output.
 """
 
         elif output_format == OutputFormat.JSON:
@@ -384,8 +401,8 @@ Format: Markdown for web/documentation
             payload = {
                 "model": self.model_name,
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.1,
-                "max_tokens": 1000,
+                "temperature": 0.2,  # CHANGED: Slightly higher for more detailed responses
+                "max_tokens": 1500,  # CHANGED: More tokens for detailed network info
                 "stream": False,
             }
 

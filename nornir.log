@@ -22,3 +22,10 @@
 2025-07-21 21:04:21,379 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show version', 'read_timeout': 30} on 1 hosts
 2025-07-21 21:04:57,762 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show version', 'read_timeout': 30} on 1 hosts
 2025-07-21 21:11:19,307 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show version', 'read_timeout': 30} on 1 hosts
+2025-07-22 00:41:35,793 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show interfaces statistics', 'read_timeout': 30} on 3 hosts
+2025-07-22 00:53:08,111 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show interfaces statistics', 'read_timeout': 30} on 3 hosts
+2025-07-22 01:02:14,811 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show interfaces statistics', 'read_timeout': 30} on 3 hosts
+2025-07-22 01:03:02,427 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show ip bgp summary', 'read_timeout': 30} on 1 hosts
+2025-07-22 01:03:46,164 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show ip route', 'read_timeout': 30} on 1 hosts
+2025-07-22 01:04:24,424 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show ip route', 'read_timeout': 30} on 1 hosts
+2025-07-22 01:05:13,585 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show route-table spine1 detail', 'read_timeout': 30} on 1 hosts

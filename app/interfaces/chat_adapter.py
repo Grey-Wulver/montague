@@ -52,12 +52,16 @@ class ChatAdapter:
         logger.info("🚀 Initializing Chat Adapter...")
 
         try:
-            # Initialize Universal Processor
-            from app.services.intent_parser import intent_parser
+            # FIXED: Use the LLM-enhanced intent parser
+            from app.services.pure_llm_intent_parser import (
+                create_enhanced_intent_parser,
+            )
             from app.services.universal_request_processor import universal_processor
 
             self._universal_processor = universal_processor
-            self._intent_parser = intent_parser
+            self._intent_parser = (
+                create_enhanced_intent_parser()
+            )  # CHANGED: Use LLM parser
 
             # Initialize universal processor if not already done
             if not await self._universal_processor.initialize():
@@ -104,7 +108,7 @@ class ChatAdapter:
     async def handle_message(self, chat_message: ChatMessage):
         """
         Handle incoming chat message using Universal Pipeline
-        THE MAIN CHAT WORKFLOW - now powered by Universal Pipeline
+        THE MAIN CHAT WORKFLOW - now powered by Universal Pipeline with LLM
         """
         try:
             logger.info(
@@ -118,13 +122,15 @@ class ChatAdapter:
 
             start_time = time.time()
 
-            # Step 1: Check for help request
+            # FIXED: More restrictive help detection - only exact help keywords
             if self._is_help_request(chat_message.clean_message):
                 await self._send_help_response(chat_message.channel_id)
                 return
 
-            # Step 2: Parse devices from message
-            devices = self._intent_parser.extract_devices(chat_message.clean_message)
+            # Step 2: Parse devices from message using LLM - FIXED: NOW ASYNC!
+            devices = await self._intent_parser.extract_devices(
+                chat_message.clean_message
+            )
 
             # Step 3: Create Universal Request for chat interface
             chat_request = create_chat_request(
@@ -142,10 +148,10 @@ class ChatAdapter:
             chat_request.timeout = self.response_timeout
 
             logger.info(
-                f"🔧 Sending request to Universal Pipeline: intent extraction + execution on {len(devices)} devices"
+                f"🔧 Sending request to Universal Pipeline: LLM intent extraction + execution on {len(devices)} devices"
             )
 
-            # Step 4: Process through Universal Pipeline
+            # Step 4: Process through Universal Pipeline (NOW WITH LLM!)
             universal_response = await self._universal_processor.process_request(
                 chat_request
             )
@@ -278,9 +284,20 @@ class ChatAdapter:
         return f"{status_emoji} {title} Results"
 
     def _is_help_request(self, message: str) -> bool:
-        """Check if message is a help request"""
-        help_keywords = ["help", "usage", "commands", "what can you do", "?"]
-        return any(keyword in message.lower() for keyword in help_keywords)
+        """FIXED: More restrictive help detection - only exact help keywords"""
+        # Only trigger help for explicit help requests, not conversational phrases
+        exact_help_keywords = ["help", "usage", "commands"]
+        message_lower = message.lower().strip()
+
+        # Check for exact keyword matches or question marks only
+        if message_lower in exact_help_keywords:
+            return True
+        if message_lower == "?" or message_lower == "??":
+            return True
+        if message_lower == "what can you do":
+            return True
+
+        return False
 
     async def _send_help_response(self, channel_id: str):
         """Send help message using intent parser"""
