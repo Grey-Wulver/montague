@@ -1,5 +1,7 @@
 # ~/net-chatbot/requirements.txt
 # Enhanced requirements for Three-Tier Discovery System
+# File: ~/net-chatbot/requirements.txt
+# EXISTING FILE - ADD ANALYTICS DEPENDENCIES FOR THREE-TIER SYSTEM
 
 # Core Framework
 fastapi>=0.115.0
@@ -52,3 +54,10 @@ ruff>=0.1.0  # Code quality
 # Additional performance dependencies
 ujson>=5.8.0  # Faster JSON parsing
 orjson>=3.9.0  # Even faster JSON for Redis
+
+# Analytics Dependencies for Three-Tier Performance Optimization
+pandas>=2.0.0  # Data analysis for performance trends
+numpy>=1.24.0  # Numerical computations for predictions
+scikit-learn>=1.3.0  # Machine learning for trend analysis (optional)
+matplotlib>=3.7.0  # Performance visualization (optional)
+seaborn>=0.12.0  # Statistical data visualization (optional)

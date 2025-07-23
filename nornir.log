@@ -47,3 +47,23 @@
 2025-07-22 13:35:15,797 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show ip bgp summary', 'read_timeout': 30} on 1 hosts
 2025-07-22 13:37:52,714 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show ip bgp summary', 'read_timeout': 30} on 1 hosts
 2025-07-22 13:56:34,176 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show ip bgp summary', 'read_timeout': 30} on 1 hosts
+2025-07-23 13:57:15,070 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp summary', 'read_timeout': 30} on 1 hosts
+2025-07-23 17:02:38,995 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp summary', 'read_timeout': 30} on 1 hosts
+2025-07-23 17:05:13,586 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp summary', 'read_timeout': 30} on 1 hosts
+2025-07-23 17:08:13,105 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp summary', 'read_timeout': 30} on 1 hosts
+2025-07-23 17:09:25,440 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp summary', 'read_timeout': 30} on 1 hosts
+2025-07-23 17:10:24,899 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp summary', 'read_timeout': 30} on 1 hosts
+2025-07-23 17:13:03,894 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp summary', 'read_timeout': 30} on 1 hosts
+2025-07-23 17:55:46,913 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp neighbors', 'read_timeout': 30} on 1 hosts
+2025-07-23 17:55:53,779 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp neighbors', 'read_timeout': 30} on 1 hosts
+2025-07-23 17:56:31,565 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp neighbors', 'read_timeout': 30} on 1 hosts
+2025-07-23 18:05:11,791 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp neighbors', 'read_timeout': 30} on 1 hosts
+2025-07-23 18:05:39,433 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp neighbors', 'read_timeout': 30} on 1 hosts
+2025-07-23 18:15:21,553 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp neighbors', 'read_timeout': 30} on 1 hosts
+2025-07-23 18:17:56,124 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp neighbors', 'read_timeout': 30} on 1 hosts
+2025-07-23 18:18:09,108 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp neighbors', 'read_timeout': 30} on 1 hosts
+2025-07-23 18:25:54,785 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp neighbors', 'read_timeout': 30} on 1 hosts
+2025-07-23 18:26:13,554 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp neighbors', 'read_timeout': 30} on 1 hosts
+2025-07-23 18:26:29,232 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp neighbors', 'read_timeout': 30} on 1 hosts
+2025-07-23 18:29:01,004 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp neighbors', 'read_timeout': 30} on 1 hosts
+2025-07-23 18:37:20,358 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp neighbors', 'read_timeout': 30} on 1 hosts

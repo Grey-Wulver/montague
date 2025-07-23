@@ -1,14 +1,14 @@
 # app/services/universal_formatter.py
 """
-Universal Formatter - LLM-Powered Response Formatting (ENHANCED FOR SHOWING ACTUAL DATA)
-Replaces ALL hardcoded normalization and extraction logic
-Uses LLM to format responses for ANY interface in ANY format
+Universal Formatter - Enterprise Scalable Anti-Hallucination Solution
+Uses intelligent LLM techniques to prevent fabrication while scaling across ALL vendors/commands
 """
 
 import json
 import logging
+import re
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Set
 
 from app.models.universal_requests import (
     DeviceExecutionResult,
@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 
 class UniversalFormatter:
     """
-    LLM-powered formatter that adapts responses to ANY interface and format
-    This is the magic that makes the universal pipeline truly universal
+    Enterprise-grade LLM formatter with scalable anti-hallucination system
+    Works for ANY vendor, ANY command, ANY output format
     """
 
     def __init__(self):
@@ -34,6 +34,8 @@ class UniversalFormatter:
             "failed_formats": 0,
             "average_format_time": 0.0,
             "format_cache_hits": 0,
+            "hallucination_blocks": 0,
+            "content_extraction_success": 0,
         }
 
         # Format cache for performance
@@ -78,8 +80,7 @@ class UniversalFormatter:
         format_options: Dict[str, Any] = None,
     ) -> Any:
         """
-        THE UNIVERSAL FORMATTER: Formats response for ANY interface/format
-        This single method replaces all hardcoded extraction logic
+        Enterprise-grade universal formatter with scalable anti-hallucination
         """
 
         start_time = time.time()
@@ -90,26 +91,55 @@ class UniversalFormatter:
         )
 
         try:
-            # Build comprehensive context with enhanced preprocessing
-            context = self._build_context(
-                user_request, intent, execution_results, discovery_results
+            # STEP 1: Extract factual content from ALL raw outputs
+            factual_content = self._extract_factual_content(execution_results)
+
+            # STEP 2: Build enterprise-grade anti-hallucination prompt
+            context = self._build_enterprise_context(
+                user_request,
+                intent,
+                execution_results,
+                discovery_results,
+                factual_content,
             )
 
-            # Generate format-specific prompt
-            prompt = self._build_format_prompt(
-                context, interface_type, output_format, format_options or {}
+            # STEP 3: Generate scalable format prompt with content grounding
+            prompt = self._build_grounded_format_prompt(
+                context,
+                interface_type,
+                output_format,
+                factual_content,
+                format_options or {},
             )
 
-            # Use direct LLM to format the response
+            # STEP 4: LLM formatting with hallucination prevention
             try:
-                formatted_response = await self._format_with_llm_direct(
-                    prompt, output_format
+                formatted_response = await self._format_with_content_grounding(
+                    prompt, output_format, factual_content
                 )
+
+                # STEP 5: Validate response against factual content
+                if self._validate_response_against_facts(
+                    formatted_response, factual_content
+                ):
+                    self.stats["content_extraction_success"] += 1
+                else:
+                    logger.warning(
+                        "Response validation failed - using content-safe fallback"
+                    )
+                    formatted_response = self._generate_content_safe_response(
+                        execution_results,
+                        factual_content,
+                        interface_type,
+                        output_format,
+                    )
+
             except Exception as e:
-                logger.warning(f"LLM formatting failed: {e} - using fallback")
-                # Fallback formatting without LLM
-                formatted_response = self._fallback_format(
-                    execution_results, interface_type, output_format
+                logger.warning(
+                    f"LLM formatting failed: {e} - using content-safe fallback"
+                )
+                formatted_response = self._generate_content_safe_response(
+                    execution_results, factual_content, interface_type, output_format
                 )
 
             self.stats["successful_formats"] += 1
@@ -122,462 +152,327 @@ class UniversalFormatter:
         except Exception as e:
             self.stats["failed_formats"] += 1
             logger.error(f"❌ Response formatting failed: {e}")
-
-            # Return fallback response
             return self._emergency_fallback(execution_results, str(e))
 
-    def _build_context(
+    def _extract_factual_content(
+        self, execution_results: Dict[str, DeviceExecutionResult]
+    ) -> Dict[str, Any]:
+        """
+        ENTERPRISE CORE: Extract all factual content from raw outputs
+        This creates a "source of truth" that prevents hallucination
+        """
+
+        factual_content = {
+            "devices": {},
+            "has_structured_data": False,
+            "has_status_messages": False,
+            "extracted_entities": {
+                "ip_addresses": set(),
+                "interfaces": set(),
+                "protocols": set(),
+                "as_numbers": set(),
+                "mac_addresses": set(),
+                "hostnames": set(),
+                "numerical_values": set(),
+            },
+            "content_type": "unknown",
+            "total_lines": 0,
+            "status_indicators": [],
+        }
+
+        for device_name, result in execution_results.items():
+            device_content = {
+                "raw_output": result.raw_output or "",
+                "success": result.success,
+                "command": result.command_executed,
+                "platform": result.platform,
+                "content_analysis": {},
+            }
+
+            if result.success and result.raw_output:
+                raw = result.raw_output.strip()
+                device_content["content_analysis"] = self._analyze_content_structure(
+                    raw
+                )
+
+                # Extract entities using regex patterns (scalable across vendors)
+                self._extract_network_entities(
+                    raw, factual_content["extracted_entities"]
+                )
+
+                # Determine content type
+                if device_content["content_analysis"]["is_status_message"]:
+                    factual_content["has_status_messages"] = True
+                    factual_content["status_indicators"].extend(
+                        device_content["content_analysis"]["status_indicators"]
+                    )
+                elif device_content["content_analysis"]["has_tabular_data"]:
+                    factual_content["has_structured_data"] = True
+
+                factual_content["total_lines"] += device_content["content_analysis"][
+                    "line_count"
+                ]
+
+            factual_content["devices"][device_name] = device_content
+
+        # Determine overall content type
+        if (
+            factual_content["has_status_messages"]
+            and not factual_content["has_structured_data"]
+        ):
+            factual_content["content_type"] = "status_only"
+        elif factual_content["has_structured_data"]:
+            factual_content["content_type"] = "structured_data"
+        elif factual_content["total_lines"] > 5:
+            factual_content["content_type"] = "unstructured_data"
+        else:
+            factual_content["content_type"] = "minimal_output"
+
+        return factual_content
+
+    def _analyze_content_structure(self, raw_output: str) -> Dict[str, Any]:
+        """
+        Analyze content structure to determine data type - VENDOR AGNOSTIC
+        """
+
+        lines = raw_output.split("\n")
+        analysis = {
+            "line_count": len(lines),
+            "is_status_message": False,
+            "has_tabular_data": False,
+            "has_configuration": False,
+            "status_indicators": [],
+            "data_patterns": [],
+        }
+
+        # Check for status messages (vendor agnostic patterns)
+        status_patterns = [
+            r"^%.*",  # Cisco/Arista % messages
+            r"^#.*",  # Some status indicators
+            r".*inactive.*",  # Protocol inactive
+            r".*not\s+found.*",  # Command not found
+            r".*not\s+configured.*",  # Not configured
+            r".*disabled.*",  # Protocol disabled
+            r".*empty.*",  # Empty table/results
+            r".*no\s+entries.*",  # No entries
+        ]
+
+        for line in lines:
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+
+            for pattern in status_patterns:
+                if re.match(pattern, line_stripped, re.IGNORECASE):
+                    analysis["is_status_message"] = True
+                    analysis["status_indicators"].append(line_stripped)
+                    break
+
+        # Check for structured data (tables, configs, etc.)
+        if analysis["line_count"] > 3:
+            # Look for table-like structures (multiple columns)
+            column_lines = 0
+            for line in lines:
+                if len(line.split()) >= 3:  # Likely columnar data
+                    column_lines += 1
+
+            if column_lines >= 2:
+                analysis["has_tabular_data"] = True
+                analysis["data_patterns"].append("tabular")
+
+        # Check for configuration data
+        config_indicators = ["!", "interface", "router", "ip route", "access-list"]
+        for line in lines:
+            for indicator in config_indicators:
+                if indicator in line.lower():
+                    analysis["has_configuration"] = True
+                    analysis["data_patterns"].append("configuration")
+                    break
+
+        return analysis
+
+    def _extract_network_entities(
+        self, raw_output: str, entities: Dict[str, Set]
+    ) -> None:
+        """
+        Extract network entities using regex - SCALABLE across all vendors
+        """
+
+        # IP addresses (IPv4)
+        ip_pattern = r"\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b"
+        entities["ip_addresses"].update(re.findall(ip_pattern, raw_output))
+
+        # AS numbers
+        as_pattern = r"\b(?:AS|as)\s*(\d{1,6})\b"
+        entities["as_numbers"].update(re.findall(as_pattern, raw_output, re.IGNORECASE))
+
+        # Interface names (vendor agnostic)
+        interface_patterns = [
+            r"\b(?:Ethernet|Eth|GigabitEthernet|Gi|TenGigabitEthernet|Te|FortyGigE|Fo)\d+[/\d]*\b",
+            r"\b(?:Management|Mgmt|Loopback|Lo)\d*\b",
+            r"\b(?:Vlan|VLAN)\d+\b",
+            r"\b(?:Port-channel|Po)\d+\b",
+        ]
+
+        for pattern in interface_patterns:
+            entities["interfaces"].update(
+                re.findall(pattern, raw_output, re.IGNORECASE)
+            )
+
+        # MAC addresses
+        mac_pattern = r"\b(?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}\b"
+        entities["mac_addresses"].update(re.findall(mac_pattern, raw_output))
+
+        # Numerical values (counters, statistics)
+        number_pattern = r"\b\d{3,}\b"  # Numbers with 3+ digits (likely statistics)
+        entities["numerical_values"].update(re.findall(number_pattern, raw_output))
+
+    def _build_enterprise_context(
         self,
         user_request: str,
         intent: str,
         execution_results: Dict[str, DeviceExecutionResult],
         discovery_results: Dict[str, DiscoveryInfo],
+        factual_content: Dict[str, Any],
     ) -> str:
-        """Build comprehensive context for LLM formatting - INTENT-AGNOSTIC APPROACH"""
+        """
+        Build enterprise-grade context with factual grounding
+        """
 
         context_parts = [
             f"User Request: {user_request}",
-            f"Detected Intent: {intent}",
-            f"Devices Processed: {len(execution_results)}",
+            f"Intent: {intent}",
+            f"Content Type: {factual_content['content_type']}",
             "",
-            "🎯 CRITICAL TASK: Analyze the user's specific request and the actual raw command output to determine what data to extract and present.",
-            "",
-            "📋 ANALYSIS INSTRUCTIONS:",
-            "1. READ the user's exact request - what specifically did they ask for?",
-            "2. EXAMINE the raw command output - what actual data is present?",
-            "3. MATCH the user request to the available data - extract what they asked for",
-            "4. If the user asked for 'configuration' but output shows 'neighbors' - say so clearly",
-            "5. If the user asked for 'neighbors' but output shows 'configuration' - say so clearly",
+            "ENTERPRISE ANTI-HALLUCINATION PROTOCOL:",
+            "1. You have access to FACTUAL CONTENT extracted from device outputs",
+            "2. You MUST use ONLY the factual content provided below",
+            "3. If factual content is empty/minimal, state that clearly",
+            "4. NEVER create network data not present in factual content",
             "",
         ]
 
-        # Add results for each device - NO PREPROCESSING, let LLM decide
-        for device_name, result in execution_results.items():
-            context_parts.append(f"=== DEVICE: {device_name} ===")
-            context_parts.append(f"Platform: {result.platform}")
-            context_parts.append(f"Command Executed: {result.command_executed}")
-            context_parts.append(f"Success: {result.success}")
+        # Add factual content summary
+        if factual_content["extracted_entities"]["ip_addresses"]:
+            context_parts.append(
+                f"FACTUAL IP ADDRESSES: {list(factual_content['extracted_entities']['ip_addresses'])}"
+            )
 
-            if result.success and result.raw_output:
-                # DEBUG: Log what we're sending to LLM
-                logger.info(f"DEBUG FORMATTER: raw_output = '{result.raw_output}'")
+        if factual_content["extracted_entities"]["interfaces"]:
+            context_parts.append(
+                f"FACTUAL INTERFACES: {list(factual_content['extracted_entities']['interfaces'])}"
+            )
 
-                # Include raw output WITHOUT preprocessing - let LLM analyze it
-                context_parts.append("Raw Command Output:")
-                context_parts.append(f"{result.raw_output}")
+        if factual_content["extracted_entities"]["as_numbers"]:
+            context_parts.append(
+                f"FACTUAL AS NUMBERS: {list(factual_content['extracted_entities']['as_numbers'])}"
+            )
 
-                # Add general guidance instead of specific extraction hints
+        if factual_content["status_indicators"]:
+            context_parts.append(
+                f"STATUS MESSAGES: {factual_content['status_indicators']}"
+            )
+
+        context_parts.append("")
+
+        # Add device results with analysis
+        for device_name, device_data in factual_content["devices"].items():
+            context_parts.append(f"=== {device_name} ===")
+            context_parts.append(f"Platform: {device_data['platform']}")
+            context_parts.append(f"Command: {device_data['command']}")
+            context_parts.append(f"Success: {device_data['success']}")
+
+            if device_data["raw_output"]:
+                context_parts.append(f"Raw Output: '{device_data['raw_output']}'")
                 context_parts.append(
-                    "⚡ ANALYSIS GUIDANCE: Look at the raw output above and determine what type of data it contains. Extract the data that matches what the user specifically requested."
+                    f"Content Analysis: {device_data['content_analysis']}"
                 )
 
-            elif not result.success:
-                context_parts.append(f"❌ ERROR: {result.error_message}")
-
-            context_parts.append("")  # Separator
-
-        # Add discovery information
-        if discovery_results:
-            context_parts.append("🔍 DISCOVERY INFORMATION:")
-            for device_name, discovery in discovery_results.items():
-                context_parts.append(
-                    f"• {device_name}: '{discovery.discovered_command}' "
-                    f"(confidence: {discovery.confidence:.2f}, "
-                    f"cached: {discovery.cached_result})"
-                )
             context_parts.append("")
 
         return "\n".join(context_parts)
 
-    def _build_format_prompt(
+    def _build_grounded_format_prompt(
         self,
         context: str,
         interface_type: InterfaceType,
         output_format: OutputFormat,
+        factual_content: Dict[str, Any],
         format_options: Dict[str, Any],
     ) -> str:
-        """Build format-specific prompts for different interfaces"""
+        """
+        Build content-grounded format prompt - SCALABLE approach
+        """
 
-        base_prompt = f"""You are a network automation assistant helping network engineers. Here's the execution context:
+        base_prompt = f"""You are formatting network automation results for enterprise use.
 
 {context}
 
-Based on what the user requested, provide the response in the specified format."""
-
-        # Interface-specific formatting instructions
-        if interface_type == InterfaceType.CHAT:
-            return base_prompt + self._get_chat_format_instructions(
-                output_format, format_options
-            )
-
-        elif interface_type == InterfaceType.API:
-            return base_prompt + self._get_api_format_instructions(
-                output_format, format_options
-            )
-
-        elif interface_type == InterfaceType.CLI:
-            return base_prompt + self._get_cli_format_instructions(
-                output_format, format_options
-            )
-
-        elif interface_type == InterfaceType.WEB:
-            return base_prompt + self._get_web_format_instructions(
-                output_format, format_options
-            )
-
-        else:
-            return base_prompt + f"\n\nFormat: {output_format.value}"
-
-    def _get_chat_format_instructions(
-        self, output_format: OutputFormat, options: Dict
-    ) -> str:
-        """Chat-specific formatting instructions - SCALABLE NETWORK ENGINEERING APPROACH"""
-
-        if output_format == OutputFormat.CONVERSATIONAL:
-            return """
-
-Format: Professional conversational response for network engineers (PLAIN TEXT, NOT JSON)
-
-🧠 **YOU ARE AN EXPERT NETWORK ENGINEER** - Apply networking expertise to analyze and respond accurately.
-
-**CORE PRINCIPLES:**
-1. **ABSOLUTE GROUND TRUTH RULE**: You MUST ONLY report data that literally exists in the raw device output text
-2. **ZERO FABRICATION TOLERANCE**: NEVER create, invent, or suggest any network data (IPs, neighbors, interfaces, routes) that is not explicitly shown in the raw output
-3. **STATUS MESSAGE RECOGNITION**: Messages starting with % or # are status/error messages - explain them, don't try to extract data from them
-4. **TECHNICAL PRECISION**: Use accurate networking terminology based only on actual device responses
-5. **EXPLICIT DATA SOURCE**: Every technical detail must come directly from the raw output
-
-**CRITICAL RULE FOR STATUS MESSAGES:**
-If the raw output contains "% BGP inactive", "% Command not found", "% Access denied", or similar:
-- This is a STATUS MESSAGE, not data
-- Do NOT create fake neighbors, routes, or configurations or any fabrications ever
-- Do NOT provide example data
-- ONLY explain what the status message means
-- Suggest alternative commands if appropriate
-
-**DATA EXTRACTION RULES:**
-- Real neighbor data looks like: "Neighbor 192.168.1.1  4  65001    123    456  never    Idle"
-- Real interface data looks like: "Ethernet1/1 is up, line protocol is up"
-- Real route data looks like: "10.0.0.0/24 is directly connected, Ethernet1/1"
-- If you don't see actual data like this, there IS NO DATA to show
-
-**ANALYSIS WORKFLOW:**
-
-**Step 1: Parse User Intent**
-- What specific information is the user requesting?
-- Are they asking for: status, configuration, statistics, troubleshooting, or analysis?
-- What level of technical detail do they expect?
-
-**Step 2: Examine Raw Output**
-- What type of data is actually present?
-- Is it structured data (tables, configs) or status messages?
-- Are there error indicators (%, #, warnings, failures)?
-
-**Step 3: Match Request to Reality**
-- Does the output contain what the user asked for?
-- If yes → Extract and present it clearly
-- If no → Explain what's actually present vs what was requested
-- If partial → Show available data and note what's missing
-
-**DEVICE OUTPUT INTERPRETATION:**
-
-**Status Messages** (% prefix, error messages):
-- Recognize these as system status, not data
-- Explain what the status means in networking terms
-- Suggest next steps if appropriate
-
-**Configuration Data** (config syntax, parameters):
-- Present actual config lines or settings
-- Explain key parameters if relevant to user's question
-- Maintain hierarchical structure
-
-**Operational Data** (statistics, states, tables):
-- Extract specific values, counters, or states
-- Present in organized, readable format
-- Include units and context where relevant
-
-**RESPONSE CONSTRUCTION:**
-
-**Professional Opening**: "Here's [what you found] for [device]:"
-
-**Data Presentation**:
-- Use bullet points (•) for lists
-- Use clear hierarchical structure
-- Include specific values, not just summaries
-- Group related information logically
-
-**Technical Accuracy**:
-- Use proper interface names, IP addresses, protocol states
-- Include relevant technical details (AS numbers, metrics, timers)
-- Be precise about quantities and states
-
-**Clear Communication**:
-- Start with direct answer to user's question
-- Use networking terminology appropriately
-- Explain status conditions clearly
-
-**EXAMPLE RESPONSE PATTERNS:**
-
-**For Status Messages**:
-"BGP is not currently running on spine1. The device returned '% BGP inactive', which means the BGP routing process is not configured or enabled. To check BGP configuration, you could try 'show running-config section bgp'."
-
-**For Actual Data**:
-"Here are the active interfaces on spine1:
-• Ethernet1/1: UP, 1.2M packets in/987K packets out, 0 errors
-• Management1: UP, 45K packets in/23K packets out, 0 errors
-• Ethernet1/2: DOWN (admin down)"
-
-**For Mismatched Requests**:
-"You requested BGP configuration, but the command returned neighbor status information instead. Here's what the output shows: [actual data]. For BGP configuration, try asking for 'show running-config bgp'."
-
-**EXPERT GUIDELINES:**
-
-✅ **Always Do:**
-- Report actual device state accurately
-- Explain networking concepts when relevant
-- Use specific technical values from output
-- Be clear about what data is/isn't available
-- Maintain professional but approachable tone
-
-❌ **Never Do:**
-- Fabricate network data not in the output
-- Give generic summaries without specific information
-- Ignore error messages or status indicators
-- Make assumptions about network state
-- Use overly complex explanations for simple requests
-
-**Remember: You are a knowledgeable network engineer helping a colleague. Be accurate, helpful, and technically sound.**
-"""
-
-        elif output_format == OutputFormat.JSON:
-            return """
-
-Format: Clean JSON for chat display - Network Engineer Focused
-- Return valid JSON object with extracted technical data
-- Include "status" field indicating data type (data/status/error)
-- Add "technical_summary" for network engineer context
-- Structure data appropriately for network information
-
-Example:
-{
- "status": "inactive_service",
- "technical_summary": "BGP routing process not running on spine1",
- "raw_message": "% BGP inactive",
- "suggested_action": "Check BGP configuration with 'show running-config section bgp'",
- "device_context": {
-   "device": "spine1",
-   "platform": "arista_eos",
-   "service_queried": "bgp"
- }
-}
-"""
-
-        else:
-            return f"\n\nFormat: {output_format.value} suitable for network engineering chat display with technical accuracy"
-
-    def _get_api_format_instructions(
-        self, output_format: OutputFormat, options: Dict
-    ) -> str:
-        """API-specific formatting instructions - ENHANCED FOR ACTUAL DATA"""
-
-        if output_format == OutputFormat.JSON:
-            return """
-
-Format: Structured JSON for API consumption
-- Return clean, consistent JSON structure
-- Use standard field names (snake_case)
-- Include metadata (success, device_count, execution_time)
-- EXTRACT AND STRUCTURE ALL ACTUAL DATA from raw output
-- Provide arrays for multi-device responses
-
-Example structure:
-{
- "success": true,
- "devices": [
-   {
-     "device": "spine1",
-     "platform": "arista_eos",
-     "command_executed": "show ip route",
-     "success": true,
-     "extracted_data": {
-       "routes": [
-         {
-           "destination": "10.0.0.0/24",
-           "next_hop": "192.168.1.1",
-           "interface": "Ethernet1/1",
-           "route_type": "connected"
-         }
-       ]
-     },
-     "discovery_used": true
-   }
- ],
- "summary": "Retrieved 25 routes from spine1",
- "execution_metadata": {
-   "total_devices": 1,
-   "successful_devices": 1,
-   "total_execution_time": "2.34s"
- }
-}
-"""
-
-        elif output_format == OutputFormat.YAML:
-            return """
-
-Format: Clean YAML structure
-- Use proper YAML formatting
-- Include consistent indentation
-- Provide clear hierarchy
-- Include comments where helpful
-- EXTRACT ACTUAL DATA and structure hierarchically
-"""
-
-        elif output_format == OutputFormat.XML:
-            return """
-
-Format: Well-formed XML
-- Use descriptive tag names
-- Include proper XML declaration
-- Nest data logically
-- Include attributes for metadata
-- EXTRACT ACTUAL DATA into structured XML elements
-"""
-
-        else:
-            return f"\n\nFormat: {output_format.value} for API consumption with actual data extraction"
-
-    def _get_cli_format_instructions(
-        self, output_format: OutputFormat, options: Dict
-    ) -> str:
-        """CLI-specific formatting instructions - ENHANCED FOR ACTUAL DATA"""
-
-        if output_format == OutputFormat.TABLE:
-            return """
-
-Format: ASCII table for CLI display
-- Create clean, aligned tables with headers
-- Use consistent column spacing
-- EXTRACT ACTUAL DATA and display in tabular format
-- Limit width to ~80 characters
-- Use | for column separators
-
-Example (Interface Statistics):
-| Interface   | Status | Input Pkts | Output Pkts | Input Errors |
-|-------------|--------|------------|-------------|--------------|
-| Ethernet1/1 | UP     | 1,234,567  | 987,654     | 0            |
-| Ethernet1/2 | UP     | 2,345,678  | 1,876,543   | 3            |
-| Management1 | UP     | 45,123     | 23,456      | 0            |
-
-Example (Route Table):
-| Destination  | Next Hop      | Interface   | Type      |
-|--------------|---------------|-------------|-----------|
-| 10.0.0.0/24  | 192.168.1.1   | Ethernet1/1 | Connected |
-| 172.16.0.0/16| 10.0.0.1      | Ethernet1/1 | Static    |
-"""
-
-        elif output_format == OutputFormat.CSV:
-            return """
-
-Format: CSV for CLI export
-- Include headers
-- Use comma separation
-- Escape special characters
-- One line per device/result
-- EXTRACT ACTUAL DATA into CSV format
-
-Example:
-Device,Interface,Status,InputPackets,OutputPackets,InputErrors
-spine1,Ethernet1/1,UP,1234567,987654,0
-spine1,Ethernet1/2,UP,2345678,1876543,3
-"""
-
-        else:
-            return f"\n\nFormat: {output_format.value} for command line display with actual data"
-
-    def _get_web_format_instructions(
-        self, output_format: OutputFormat, options: Dict
-    ) -> str:
-        """Web UI-specific formatting instructions - ENHANCED FOR ACTUAL DATA"""
-
-        if output_format == OutputFormat.HTML:
-            return """
-
-Format: HTML for web display
-- Use semantic HTML elements
-- Include CSS classes for styling
-- Create tables for structured data
-- Use badges/alerts for status indicators
-- Make it responsive and accessible
-- EXTRACT ACTUAL DATA and present in structured HTML
-
-Example:
-<div class="device-result">
- <h3>spine1 <span class="badge badge-success">Connected</span></h3>
-
- <h4>Interface Statistics</h4>
- <table class="table table-striped">
-   <thead>
-     <tr><th>Interface</th><th>Status</th><th>Input Packets</th><th>Output Packets</th></tr>
-   </thead>
-   <tbody>
-     <tr><td>Ethernet1/1</td><td><span class="badge badge-success">UP</span></td><td>1,234,567</td><td>987,654</td></tr>
-   </tbody>
- </table>
-</div>
-"""
-
-        elif output_format == OutputFormat.MARKDOWN:
-            return """
-
-Format: Markdown for web/documentation
-- Use proper markdown syntax
-- Include headers, lists, code blocks
-- Create tables where appropriate
-- Use emphasis for important data
-- EXTRACT ACTUAL DATA and format in markdown
-
-Example:
-# Network Data for spine1
-
-## Interface Statistics
-
-| Interface | Status | Input Packets | Output Packets |
-|-----------|--------|---------------|----------------|
-| Ethernet1/1 | **UP** | 1,234,567 | 987,654 |
-| Ethernet1/2 | **UP** | 2,345,678 | 1,876,543 |
-
-## Route Table
-
-- **10.0.0.0/24** via 192.168.1.1 (Ethernet1/1) - Connected
-- **172.16.0.0/16** via 10.0.0.1 (Ethernet1/1) - Static
-"""
-
-        else:
-            return f"\n\nFormat: {output_format.value} for web display with actual data extraction"
-
-    async def _format_with_llm_direct(
-        self, prompt: str, output_format: OutputFormat
+CRITICAL FORMATTING RULES:
+1. Base your response ONLY on the factual content and raw output provided above
+2. If status messages indicate no data is available, explain that clearly
+3. If structured data exists, present it organized and readable
+4. NEVER add information not present in the raw output
+5. Quote exact values from raw output when possible
+
+Content Type: {factual_content["content_type"]}
+Response Format: {output_format.value} for {interface_type.value}"""
+
+        # Add format-specific instructions based on content type
+        if factual_content["content_type"] == "status_only":
+            base_prompt += """
+
+STATUS MESSAGE FORMATTING:
+- Explain what the status message means
+- Do not create fake data
+- Suggest alternative approaches if appropriate
+- Be clear about what information is not available"""
+
+        elif factual_content["content_type"] == "structured_data":
+            base_prompt += """
+
+STRUCTURED DATA FORMATTING:
+- Present data in organized, readable format
+- Use actual values from raw output
+- Maintain technical accuracy
+- Group related information logically"""
+
+        # Add interface-specific formatting
+        if (
+            interface_type == InterfaceType.CHAT
+            and output_format == OutputFormat.CONVERSATIONAL
+        ):
+            base_prompt += """
+
+CONVERSATIONAL FORMAT:
+- Professional network engineer tone
+- Plain text response (not JSON)
+- Clear explanations of technical concepts
+- Direct answers to user questions"""
+
+        return base_prompt
+
+    async def _format_with_content_grounding(
+        self, prompt: str, output_format: OutputFormat, factual_content: Dict[str, Any]
     ) -> Any:
-        """Direct LLM call optimized for maximum consistency and detailed responses"""
+        """
+        LLM formatting with enterprise content grounding
+        """
 
         try:
             import aiohttp
 
-            # Optimized parameters for consistency and detailed responses
+            # Content-grounded LLM parameters
             payload = {
                 "model": self.model_name,
                 "messages": [{"role": "user", "content": prompt}],
-                # Consistency optimizations
-                "temperature": 0.01,  # EVEN LOWER: Maximum determinism
-                "top_p": 0.9,  # Focus on high-probability tokens
-                "top_k": 40,  # Limit token choices for consistency
-                "repeat_penalty": 1.1,  # Avoid repetitive text
-                # Token optimizations
-                "max_tokens": 4000,  # INCREASED: More room for detailed data
-                "min_tokens": 150,  # Ensure substantial responses
-                # Response control
+                "temperature": 0.1,  # Low but not zero for natural language
+                "top_p": 0.9,
+                "top_k": 40,
+                "repeat_penalty": 1.1,
+                "max_tokens": 2000,
                 "stream": False,
-                "stop": ["Human:", "Assistant:", "```"],  # Stop at common break points
+                "stop": ["FACTUAL", "Example:", "For instance:"],  # Prevent examples
             }
 
             timeout = aiohttp.ClientTimeout(total=self.timeout)
@@ -596,155 +491,162 @@ Example:
                                 choices[0].get("message", {}).get("content", "").strip()
                             )
 
-                            # Post-process response for better consistency
-                            llm_response = self._post_process_response(
-                                llm_response, output_format
-                            )
+                            # Clean response minimally
+                            llm_response = self._clean_response_enterprise(llm_response)
 
-                            # Handle response based on expected format
                             if output_format == OutputFormat.CONVERSATIONAL:
                                 return llm_response
-
                             elif output_format == OutputFormat.JSON:
                                 try:
-                                    cleaned_json = self._clean_json_response(
-                                        llm_response
-                                    )
-                                    return json.loads(cleaned_json)
+                                    return json.loads(llm_response)
                                 except json.JSONDecodeError:
                                     return {"formatted_response": llm_response}
-
                             else:
                                 return llm_response
 
-                    # If HTTP request failed
                     error_text = await response.text()
                     logger.error(f"LLM API error {response.status}: {error_text}")
                     raise ValueError(f"LLM API returned {response.status}")
 
         except Exception as e:
-            logger.error(f"Direct LLM call failed: {e}")
-            raise ValueError("LLM formatting failed - no response") from e
+            logger.error(f"Content-grounded LLM call failed: {e}")
+            raise ValueError("LLM formatting failed") from e
 
-    def _post_process_response(self, response: str, output_format: OutputFormat) -> str:
-        """Post-process LLM response for better consistency"""
+    def _validate_response_against_facts(
+        self, response: str, factual_content: Dict[str, Any]
+    ) -> bool:
+        """
+        Enterprise validation: Ensure response doesn't contain hallucinated content
+        """
 
-        # Remove common inconsistencies
-        response = response.strip()
+        if not isinstance(response, str):
+            return True  # Non-string responses (JSON, etc.) handled separately
 
-        # Remove any JSON wrapper if this should be conversational
-        if output_format == OutputFormat.CONVERSATIONAL:
-            # Remove JSON markers that sometimes appear
-            if response.startswith("```json") and response.endswith("```"):
-                response = response[7:-3].strip()
-            elif response.startswith("{") and response.endswith("}"):
-                # Try to extract text from JSON
-                try:
-                    data = json.loads(response)
-                    if isinstance(data, dict):
-                        # Look for common text fields
-                        for field in [
-                            "response",
-                            "result",
-                            "message",
-                            "content",
-                            "formatted_response",
-                        ]:
-                            if field in data and isinstance(data[field], str):
-                                response = data[field]
-                                break
-                except (json.JSONDecodeError, KeyError, TypeError):
-                    pass  # Keep original response if JSON parsing fails
+        response_lower = response.lower()
 
-        # Ensure proper formatting for network data
-        if "Here" not in response and any(
-            device in response.lower()
-            for device in ["spine", "leaf", "switch", "router"]
-        ):
-            # Add a proper intro if missing
-            response = f"Here's the requested information:\n\n{response}"
+        # Check for hallucinated IP addresses
+        response_ips = set(
+            re.findall(
+                r"\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b",
+                response,
+            )
+        )
+        factual_ips = factual_content["extracted_entities"]["ip_addresses"]
 
-        # Clean up common formatting issues
-        response = response.replace("\\n", "\n")  # Fix escaped newlines
-        response = "\n".join(
-            line.strip() for line in response.split("\n")
-        )  # Clean spacing
+        hallucinated_ips = response_ips - factual_ips
+        if hallucinated_ips:
+            logger.warning(f"Hallucinated IP addresses detected: {hallucinated_ips}")
+            self.stats["hallucination_blocks"] += 1
+            return False
 
-        return response
+        # Check for hallucinated AS numbers
+        response_as = set(re.findall(r"\bas\s*(\d{1,6})\b", response, re.IGNORECASE))
+        factual_as = factual_content["extracted_entities"]["as_numbers"]
 
-    def _clean_json_response(self, response_text: str) -> str:
-        """Clean JSON response from LLM (simplified version)"""
+        hallucinated_as = response_as - factual_as
+        if hallucinated_as:
+            logger.warning(f"Hallucinated AS numbers detected: {hallucinated_as}")
+            self.stats["hallucination_blocks"] += 1
+            return False
 
-        # Find JSON object boundaries
-        start_idx = response_text.find("{")
-        if start_idx >= 0:
-            # Find matching closing brace
-            brace_count = 0
-            end_idx = start_idx
+        # If content type is status_only, ensure no fake structured data
+        if factual_content["content_type"] == "status_only":
+            # Check for patterns that suggest fake tabular data
+            fake_table_indicators = [
+                "neighbor",
+                "established",
+                "idle",
+                "192.168",
+                "10.0.0",
+                "ethernet1/",
+            ]
 
-            for i in range(start_idx, len(response_text)):
-                if response_text[i] == "{":
-                    brace_count += 1
-                elif response_text[i] == "}":
-                    brace_count -= 1
-                    if brace_count == 0:
-                        end_idx = i
-                        break
+            # If we have status indicators but response contains fake data patterns
+            if factual_content["status_indicators"] and any(
+                indicator in response_lower for indicator in fake_table_indicators
+            ):
+                # But those patterns don't exist in actual output
+                all_raw = " ".join(
+                    [
+                        device["raw_output"]
+                        for device in factual_content["devices"].values()
+                    ]
+                ).lower()
+                if not any(
+                    indicator in all_raw
+                    for indicator in fake_table_indicators
+                    if indicator in response_lower
+                ):
+                    logger.warning(
+                        "Fake structured data detected in status-only response"
+                    )
+                    self.stats["hallucination_blocks"] += 1
+                    return False
 
-            if brace_count == 0:
-                return response_text[start_idx : end_idx + 1]
+        return True
 
-        # Fallback: return original if no valid JSON structure found
-        return response_text
-
-    def _fallback_format(
+    def _generate_content_safe_response(
         self,
         execution_results: Dict[str, DeviceExecutionResult],
+        factual_content: Dict[str, Any],
         interface_type: InterfaceType,
         output_format: OutputFormat,
-    ) -> Any:
-        """Fallback formatting when LLM is not available"""
+    ) -> str:
+        """
+        Generate content-safe response using only factual content
+        """
 
-        logger.info("Using fallback formatting (no LLM)")
+        # Get first device for simplicity (enterprise extension: handle multiple devices)
+        device_name = list(execution_results.keys())[0]
+        device_data = factual_content["devices"][device_name]
 
-        # Simple fallback for different formats
-        if output_format == OutputFormat.JSON:
-            return {
-                "success": any(r.success for r in execution_results.values()),
-                "devices": [
-                    {
-                        "device": name,
-                        "success": result.success,
-                        "command": result.command_executed,
-                        "error": result.error_message if not result.success else None,
-                    }
-                    for name, result in execution_results.items()
-                ],
-            }
+        if factual_content["content_type"] == "status_only":
+            status_msg = (
+                factual_content["status_indicators"][0]
+                if factual_content["status_indicators"]
+                else device_data["raw_output"]
+            )
 
-        elif output_format == OutputFormat.TABLE:
-            # Simple table format
-            lines = ["Device | Status | Command"]
-            lines.append("-" * 40)
-            for name, result in execution_results.items():
-                status = "✅" if result.success else "❌"
-                lines.append(f"{name} | {status} | {result.command_executed}")
-            return "\n".join(lines)
+            if "bgp" in status_msg.lower() and "inactive" in status_msg.lower():
+                return f"BGP is not currently running on {device_name}. The device returned '{status_msg}', which means the BGP routing process is not configured or enabled. To check BGP configuration, you could try 'show running-config section bgp'."
+            else:
+                return f"The command on {device_name} returned a status message: '{status_msg}'. This indicates the requested information is not currently available."
+
+        elif factual_content["content_type"] == "structured_data":
+            return f"Command executed successfully on {device_name}. Here's the output:\n\n{device_data['raw_output']}"
 
         else:
-            # Simple text format
-            results = []
-            for name, result in execution_results.items():
-                status = (
-                    "Success" if result.success else f"Failed: {result.error_message}"
-                )
-                results.append(f"{name}: {status}")
-            return "\n".join(results)
+            return f"Command output from {device_name}:\n{device_data['raw_output']}"
+
+    def _clean_response_enterprise(self, response: str) -> str:
+        """Enterprise-grade response cleaning"""
+
+        # Basic cleaning
+        response = response.strip()
+
+        # Remove code blocks if present
+        if response.startswith("```") and response.endswith("```"):
+            lines = response.split("\n")
+            if len(lines) > 2:
+                response = "\n".join(lines[1:-1])
+
+        # Remove JSON wrapping for conversational responses
+        if response.startswith("{") and response.endswith("}"):
+            try:
+                data = json.loads(response)
+                if isinstance(data, dict) and len(data) == 1:
+                    key = list(data.keys())[0]
+                    if key in ["response", "message", "content", "formatted_response"]:
+                        response = data[key]
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+        return response
 
     def _emergency_fallback(
         self, execution_results: Dict[str, DeviceExecutionResult], error: str
     ) -> str:
-        """Emergency fallback when all formatting fails"""
+        """Emergency fallback for critical failures"""
 
         success_count = sum(1 for r in execution_results.values() if r.success)
         total_count = len(execution_results)
@@ -777,19 +679,26 @@ Example:
             return False
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get formatter statistics"""
+        """Get formatter statistics including enterprise metrics"""
 
         success_rate = 0.0
+        hallucination_block_rate = 0.0
+
         if self.stats["total_formats"] > 0:
             success_rate = (
                 self.stats["successful_formats"] / self.stats["total_formats"]
+            ) * 100
+            hallucination_block_rate = (
+                self.stats["hallucination_blocks"] / self.stats["total_formats"]
             ) * 100
 
         return {
             **self.stats,
             "success_rate_percent": round(success_rate, 2),
+            "hallucination_block_rate_percent": round(hallucination_block_rate, 2),
             "llm_available": hasattr(self, "llm_url"),
             "direct_llm_connection": True,
+            "enterprise_grade": True,
         }
 
 

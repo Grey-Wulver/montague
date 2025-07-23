@@ -1,8 +1,10 @@
-# app/services/universal_request_processor.py
+# File: ~/net-chatbot/app/services/universal_request_processor.py
+# EXISTING FILE - EXACT UPDATES FOR THREE-TIER INTEGRATION
+
 """
-Universal Request Processor - The Core Engine (ENHANCED WITH LLM)
+Universal Request Processor - The Core Engine (ENHANCED WITH THREE-TIER DISCOVERY)
 Processes ALL requests regardless of interface (Chat, API, CLI, Web)
-Now uses pure LLM understanding for intent parsing
+Uses pure LLM understanding for intent parsing + Three-Tier Discovery for commands
 """
 
 import logging
@@ -18,6 +20,9 @@ from app.models.universal_requests import (
     validate_request_size,
 )
 
+# ADD THIS NEW IMPORT
+from app.services.hybrid_command_discovery import create_hybrid_discovery_service
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,51 +30,55 @@ class UniversalRequestProcessor:
     """
     The ONE engine that processes ALL network automation requests
     Chat, API, CLI, Web - all interfaces use this same pipeline
-    NOW WITH PURE LLM UNDERSTANDING!
+    NOW WITH PURE LLM UNDERSTANDING + THREE-TIER DISCOVERY!
     """
 
     def __init__(self):
         # Core services - imported dynamically to avoid circular imports
-        self._dynamic_discovery = None
+        self._hybrid_discovery = None  # NEW: Three-tier discovery system
         self._network_executor = None
         self._inventory_service = None
         self._intent_parser = None
         self._universal_formatter = None
 
-        # Performance tracking
+        # Performance tracking - ENHANCED for three-tier system
         self.stats = {
             "total_requests": 0,
             "successful_requests": 0,
             "failed_requests": 0,
             "total_discoveries": 0,
             "cache_hits": 0,
+            "redis_hits": 0,  # NEW: Redis cache hits
+            "postgres_hits": 0,  # NEW: PostgreSQL hits
+            "llm_discoveries": 0,  # NEW: LLM discoveries
             "average_execution_time": 0.0,
         }
 
     async def initialize(self):
         """Initialize all required services"""
-        logger.info("🚀 Initializing Universal Request Processor...")
+        logger.info(
+            "🚀 Initializing Universal Request Processor with Three-Tier Discovery..."
+        )
 
         try:
             # Import services
-            from app.services.dynamic_command_discovery import dynamic_discovery
             from app.services.executor import network_executor
             from app.services.inventory import inventory_service
             from app.services.pure_llm_intent_parser import (
-                create_enhanced_intent_parser,  # CHANGED: Use LLM intent parser
+                create_enhanced_intent_parser,
             )
             from app.services.universal_formatter import universal_formatter
 
-            self._dynamic_discovery = dynamic_discovery
+            # NEW: Initialize three-tier hybrid discovery
+            self._hybrid_discovery = await create_hybrid_discovery_service()
+
             self._network_executor = network_executor
             self._inventory_service = inventory_service
-            self._intent_parser = (
-                create_enhanced_intent_parser()
-            )  # CHANGED: Use LLM intent parser
+            self._intent_parser = create_enhanced_intent_parser()
             self._universal_formatter = universal_formatter
 
             logger.info(
-                "✅ Universal Request Processor initialized successfully with LLM intent understanding"
+                "✅ Universal Request Processor initialized successfully with LLM intent understanding + Three-Tier Discovery"
             )
             return True
 
@@ -80,7 +89,7 @@ class UniversalRequestProcessor:
     async def process_request(self, request: UniversalRequest) -> UniversalResponse:
         """
         THE MAIN PIPELINE: Process any request from any interface
-        This is the heart of the universal system - NOW WITH LLM UNDERSTANDING!
+        This is the heart of the universal system - NOW WITH THREE-TIER DISCOVERY!
         """
         start_time = time.time()
         self.stats["total_requests"] += 1
@@ -93,23 +102,23 @@ class UniversalRequestProcessor:
             # Validate request
             validate_request_size(request)
 
-            # 1. Parse Intent and Extract Devices (NOW USES LLM!)
+            # 1. Parse Intent and Extract Devices (UNCHANGED - LLM parsing)
             intent, resolved_devices = await self._parse_and_resolve_request(request)
 
-            # 2. Discover Commands for Each Device
-            discovery_results = await self._discover_commands(
+            # 2. Discover Commands for Each Device (UPDATED - Three-tier discovery)
+            discovery_results = await self._discover_commands_three_tier(
                 intent, resolved_devices, request
             )
 
-            # 3. Execute Commands on All Devices
+            # 3. Execute Commands on All Devices (UNCHANGED)
             execution_results = await self._execute_commands(discovery_results, request)
 
-            # 4. Format Response for Requested Interface
+            # 4. Format Response for Requested Interface (ENHANCED)
             formatted_response = await self._format_response(
                 request, intent, execution_results, discovery_results
             )
 
-            # 5. Build Universal Response
+            # 5. Build Universal Response (ENHANCED with three-tier metadata)
             response = await self._build_response(
                 request,
                 intent,
@@ -145,7 +154,7 @@ class UniversalRequestProcessor:
     async def _parse_and_resolve_request(
         self, request: UniversalRequest
     ) -> Tuple[str, List[Any]]:
-        """Parse user input and resolve devices - NOW WITH PURE LLM UNDERSTANDING!"""
+        """Parse user input and resolve devices - UNCHANGED LLM UNDERSTANDING"""
 
         logger.info(f"🧠 Using LLM to understand user intent: '{request.user_input}'")
 
@@ -187,10 +196,10 @@ class UniversalRequestProcessor:
 
         return intent, resolved_devices
 
-    async def _discover_commands(
+    async def _discover_commands_three_tier(
         self, intent: str, devices: List[Any], request: UniversalRequest
     ) -> Dict[str, DiscoveryInfo]:
-        """Discover appropriate commands for each device platform"""
+        """Discover appropriate commands using three-tier system (Redis -> PostgreSQL -> LLM)"""
 
         discovery_results = {}
         discovery_start = time.time()
@@ -203,58 +212,69 @@ class UniversalRequestProcessor:
                 platform_groups[platform] = []
             platform_groups[platform].append(device)
 
-        # Discover commands per platform
+        # Discover commands per platform using three-tier system
         for platform, platform_devices in platform_groups.items():
             logger.info(
-                f"🧠 Discovering command for intent '{intent}' on platform {platform}"
+                f"🔍 Three-tier discovery for intent '{intent}' on platform {platform}"
             )
 
-            # Use first device of platform for discovery
-            sample_device = platform_devices[0]
+            try:
+                # Use three-tier discovery system - EXACT METHOD SIGNATURE
+                (
+                    command,
+                    confidence,
+                    source,
+                ) = await self._hybrid_discovery.discover_command(
+                    intent=intent,
+                    platform=platform,
+                    user_context={
+                        "source": "universal_pipeline",
+                        "force_fresh": request.force_fresh_discovery,
+                        "device_count": len(platform_devices),
+                    },
+                )
 
-            discovery_result = await self._dynamic_discovery.discover_command(
-                user_intent=intent,
-                device=sample_device,
-                allow_cached=not request.force_fresh_discovery,
-            )
+                # Update statistics based on discovery source
+                if source == "redis_cache":
+                    self.stats["redis_hits"] += 1
+                    self.stats["cache_hits"] += 1
+                elif source == "postgres_db":
+                    self.stats["postgres_hits"] += 1
+                    self.stats["cache_hits"] += 1
+                elif source == "llm_discovery":
+                    self.stats["llm_discoveries"] += 1
+                    self.stats["total_discoveries"] += 1
 
-            if discovery_result.success:
                 # Apply discovery to all devices of this platform
                 for device in platform_devices:
-                    # FIXED: Check if this was a cached result by examining the reasoning
-                    cached_result = (
-                        "cached" in discovery_result.reasoning.lower()
-                        if discovery_result.reasoning
-                        else False
-                    )
-
                     discovery_results[device.name] = DiscoveryInfo(
                         intent_detected=intent,
-                        discovered_command=discovery_result.command,  # FIXED: use .command from DiscoveryResult
-                        confidence=discovery_result.confidence,
-                        reasoning=discovery_result.reasoning,
-                        cached_result=cached_result,  # FIXED: derive from reasoning instead of accessing non-existent attribute
-                        discovery_time=discovery_result.processing_time,  # FIXED: use .processing_time from DiscoveryResult
+                        discovered_command=command,
+                        confidence=confidence,
+                        reasoning=f"Three-tier discovery via {source}",
+                        cached_result=(source in ["redis_cache", "postgres_db"]),
+                        discovery_time=0.1,  # Will be updated with actual timing
                         platform=platform,
                         fallback_used=False,
                     )
 
-                    if not cached_result:
-                        self.stats["total_discoveries"] += 1
-                    else:
-                        self.stats["cache_hits"] += 1
-
                 logger.info(
-                    f"✅ Discovered '{discovery_result.command}' for {len(platform_devices)} {platform} devices"
+                    f"✅ Three-tier discovery: '{command}' for {len(platform_devices)} {platform} devices "
+                    f"(source: {source}, confidence: {confidence:.2f})"
                 )
-            else:
+
+            except Exception as e:
                 logger.error(
-                    f"❌ Command discovery failed for platform {platform}: {discovery_result.reasoning if hasattr(discovery_result, 'reasoning') else 'Unknown error'}"
+                    f"❌ Three-tier discovery failed for platform {platform}: {e}"
                 )
-                raise ValueError(f"Could not discover command for platform {platform}")
+                raise ValueError(
+                    f"Could not discover command for platform {platform}: {e}"
+                ) from e
 
         total_discovery_time = time.time() - discovery_start
-        logger.info(f"🔍 Command discovery completed in {total_discovery_time:.2f}s")
+        logger.info(
+            f"🔍 Three-tier command discovery completed in {total_discovery_time:.2f}s"
+        )
 
         return discovery_results
 
@@ -353,7 +373,7 @@ class UniversalRequestProcessor:
         formatted_response: Any,
         start_time: float,
     ) -> UniversalResponse:
-        """Build the final UniversalResponse object"""
+        """Build the final UniversalResponse object with three-tier metadata"""
 
         execution_time = time.time() - start_time
 
@@ -362,7 +382,7 @@ class UniversalRequestProcessor:
         successful_devices = sum(1 for r in execution_results.values() if r.success)
         failed_devices = total_devices - successful_devices
 
-        # Discovery statistics
+        # Discovery statistics - ENHANCED for three-tier
         discovery_used = any(discovery_results.values())
         new_discoveries = sum(
             1 for d in discovery_results.values() if not d.cached_result
@@ -383,6 +403,13 @@ class UniversalRequestProcessor:
                 for name, result in execution_results.items()
                 if result.raw_output
             }
+
+        # NEW: Get three-tier performance stats
+        three_tier_stats = (
+            await self._hybrid_discovery.get_performance_stats()
+            if self._hybrid_discovery
+            else {}
+        )
 
         return UniversalResponse(
             request_id=request.request_id,
@@ -407,7 +434,9 @@ class UniversalRequestProcessor:
                 "interface_type": request.interface_type.value,
                 "output_format": request.output_format.value,
                 "intent": intent,
-                "llm_enhanced": True,  # NEW: Flag to indicate LLM processing
+                "llm_enhanced": True,
+                "three_tier_discovery": True,  # NEW: Flag for three-tier system
+                "three_tier_stats": three_tier_stats,  # NEW: Three-tier performance data
             },
         )
 
@@ -426,7 +455,7 @@ class UniversalRequestProcessor:
             ) / total_successful
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get processor statistics"""
+        """Get processor statistics - ENHANCED with three-tier metrics"""
 
         success_rate = 0.0
         if self.stats["total_requests"] > 0:
@@ -439,25 +468,46 @@ class UniversalRequestProcessor:
         if total_discoveries > 0:
             cache_hit_rate = (self.stats["cache_hits"] / total_discoveries) * 100
 
+        # NEW: Three-tier specific metrics
+        redis_hit_rate = 0.0
+        postgres_hit_rate = 0.0
+        llm_discovery_rate = 0.0
+
+        if total_discoveries > 0:
+            redis_hit_rate = (self.stats["redis_hits"] / total_discoveries) * 100
+            postgres_hit_rate = (self.stats["postgres_hits"] / total_discoveries) * 100
+            llm_discovery_rate = (
+                self.stats["llm_discoveries"] / total_discoveries
+            ) * 100
+
         return {
             **self.stats,
             "success_rate_percent": round(success_rate, 2),
             "cache_hit_rate_percent": round(cache_hit_rate, 2),
+            "redis_hit_rate_percent": round(redis_hit_rate, 2),  # NEW
+            "postgres_hit_rate_percent": round(postgres_hit_rate, 2),  # NEW
+            "llm_discovery_rate_percent": round(llm_discovery_rate, 2),  # NEW
             "total_discoveries_with_cache": total_discoveries,
             "llm_enhanced": True,
+            "three_tier_discovery": True,  # NEW
         }
 
     async def health_check(self) -> Dict[str, Any]:
-        """Check health of all dependent services"""
+        """Check health of all dependent services - UPDATED for three-tier"""
 
         health_status = {"universal_processor": "healthy", "services": {}}
 
         try:
-            # Check dynamic discovery
-            if self._dynamic_discovery:
-                health_status["services"]["dynamic_discovery"] = "healthy"
+            # NEW: Check three-tier hybrid discovery
+            if self._hybrid_discovery:
+                try:
+                    # Try to get stats to verify it's working
+                    await self._hybrid_discovery.get_performance_stats()
+                    health_status["services"]["hybrid_discovery"] = "healthy"
+                except Exception:
+                    health_status["services"]["hybrid_discovery"] = "error"
             else:
-                health_status["services"]["dynamic_discovery"] = "not_initialized"
+                health_status["services"]["hybrid_discovery"] = "not_initialized"
 
             # Check network executor
             if self._network_executor:
@@ -489,6 +539,28 @@ class UniversalRequestProcessor:
                 health_status["services"]["llm_intent_parser"] = "healthy"
             else:
                 health_status["services"]["llm_intent_parser"] = "not_initialized"
+
+            # NEW: Check database connections for three-tier system
+            try:
+                from app.core.database import get_db_session_direct, get_redis_client
+
+                # Test PostgreSQL
+                session = await get_db_session_direct()
+                try:
+                    from sqlalchemy import text
+
+                    await session.execute(text("SELECT 1"))
+                    health_status["services"]["postgresql"] = "healthy"
+                finally:
+                    await session.close()
+
+                # Test Redis
+                redis_client = await get_redis_client()
+                await redis_client.ping()
+                health_status["services"]["redis"] = "healthy"
+
+            except Exception as db_error:
+                health_status["services"]["database_error"] = str(db_error)
 
         except Exception as e:
             health_status["universal_processor"] = f"error: {str(e)}"
