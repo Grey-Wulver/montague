@@ -54,7 +54,9 @@ class CommandMapping(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     # Metadata for LLM discoveries
-    metadata = Column(JSONB, nullable=True)  # Store LLM reasoning, alternatives, etc.
+    discovery_metadata = Column(
+        JSONB, nullable=True
+    )  # Store LLM reasoning, alternatives, etc.
 
     # Performance optimization constraints
     __table_args__ = (
@@ -77,7 +79,7 @@ class CommandMapping(Base):
             "source": self.source,
             "usage_count": self.usage_count,
             "cached_at": datetime.utcnow().isoformat(),
-            "metadata": self.metadata or {},
+            "metadata": self.discovery_metadata or {},
         }
 
     @classmethod
@@ -91,7 +93,7 @@ class CommandMapping(Base):
         alternatives: Optional[list] = None,
     ):
         """Create CommandMapping from LLM discovery result"""
-        metadata = {
+        discovery_metadata = {
             "discovery_method": "llm",
             "reasoning": reasoning,
             "alternatives": alternatives or [],
@@ -106,7 +108,7 @@ class CommandMapping(Base):
             source="llm_discovery",
             usage_count=1,
             last_used=datetime.utcnow(),
-            metadata=metadata,
+            discovery_metadata=discovery_metadata,
         )
 
 
@@ -276,7 +278,7 @@ async def seed_initial_data(session):
                 confidence=0.8,  # Default community confidence
                 source="community",
                 usage_count=0,
-                metadata={
+                discovery_metadata={
                     "seeded_from": "community_mapper",
                     "seed_date": datetime.utcnow().isoformat(),
                 },
