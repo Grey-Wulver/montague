@@ -1,0 +1,42 @@
+# ~/net-chatbot/cache/docker-compose.yml
+# Redis Service - Three-Tier Discovery Cache
+
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: netops-redis
+    restart: unless-stopped
+    command: redis-server /usr/local/etc/redis/redis.conf
+    environment:
+      REDIS_MAXMEMORY: ${REDIS_MAXMEMORY:-512mb}
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - netops-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  netops-network:
+    driver: bridge
+    name: netops-network
+    external: true
+
+volumes:
+  redis_data:
+    driver: local
+    name: netops-redis-data
