@@ -37,7 +37,7 @@ class RAGIntegrationTester:
 
     def __init__(self):
         self.monty_url = "http://localhost:8000"
-        self.barrow_url = "http://localhost:8001"
+        self.barrow_url = "http://192.168.1.11:8001"  # Host machine IP
         self.test_results = []
 
     async def run_all_tests(self) -> bool:

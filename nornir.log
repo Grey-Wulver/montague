@@ -69,3 +69,6 @@
 2025-07-23 18:37:20,358 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp neighbors', 'read_timeout': 30} on 1 hosts
 2025-07-23 18:41:02,118 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show bgp neighbors', 'read_timeout': 30} on 1 hosts
 2025-07-23 18:41:46,466 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show interfaces state', 'read_timeout': 30} on 2 hosts
+2025-07-26 13:37:00,501 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show version', 'read_timeout': 30} on 1 hosts
+2025-07-26 14:03:28,450 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show version', 'read_timeout': 30} on 1 hosts
+2025-07-26 14:04:43,974 -  nornir.core -     INFO -        run() - Running task 'netmiko_send_command' with args {'command_string': 'show version', 'read_timeout': 30} on 1 hosts

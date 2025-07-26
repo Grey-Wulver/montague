@@ -1,9 +1,8 @@
-# File: ~/net-chatbot/app/services/hybrid_command_discovery.py
-# HybridCommandDiscovery Service - LLM-Powered Normalization & Three-Tier Discovery
-# FULLY SCALABLE: No hardcoded patterns, pure LLM intelligence
-
+# app/services/hybrid_command_discovery.py
 """
 HybridCommandDiscovery Service - LLM-Powered Three-Tier Progressive Performance System
+
+FIXED: Returns proper DiscoveryResult objects instead of tuples for consistent data handling.
 
 Revolutionary approach using LLM-powered intent normalization for infinite scalability:
 - NO hardcoded command patterns or normalization rules
@@ -27,7 +26,7 @@ import json
 import logging
 import time
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import aiohttp
 from sqlalchemy import select, update
@@ -35,19 +34,21 @@ from sqlalchemy.dialects.postgresql import insert
 
 from app.core.database import get_db_session_direct, get_redis_client
 from app.models.command_mappings import CommandMapping
+from app.models.discovery_models import DiscoveryResult, NormalizationResult
 
 logger = logging.getLogger(__name__)
 
 
 class HybridCommandDiscovery:
     """
-    LLM-Powered three-tier hybrid discovery system optimized for infinite scalability.
+    FIXED: LLM-Powered three-tier hybrid discovery system with consistent return types.
 
     Revolutionary Features:
     - LLM-powered intent normalization (no hardcoded rules)
     - Pure LLM command discovery (no pattern matching)
     - Integrates with existing LM Studio infrastructure
     - Self-improving through intelligent caching
+    - FIXED: Returns DiscoveryResult objects for consistent handling
 
     Performance Evolution Strategy:
     - Week 1: 5% Redis + 15% PostgreSQL + 80% LLM (learning phase)
@@ -80,9 +81,9 @@ class HybridCommandDiscovery:
 
     async def discover_command(
         self, intent: str, platform: str, user_context: Optional[Dict] = None
-    ) -> Tuple[str, float, str]:
+    ) -> DiscoveryResult:
         """
-        LLM-powered three-tier discovery with intelligent normalization.
+        FIXED: LLM-powered three-tier discovery returning DiscoveryResult object.
 
         Args:
             intent: Natural language intent (e.g., "Show BGP neighbor status on spine1")
@@ -90,10 +91,13 @@ class HybridCommandDiscovery:
             user_context: Optional context for discovery enhancement
 
         Returns:
-            Tuple[command, confidence, source] where:
+            DiscoveryResult object with:
             - command: Actual network command to execute
             - confidence: Float 0.0-1.0 indicating command reliability
             - source: "redis_cache", "postgres_db", "llm_discovery", or "fallback"
+            - reasoning: Optional explanation of discovery logic
+            - discovery_time: Time taken for this discovery
+            - Other metadata for analytics and debugging
         """
         start_time = time.time()
         self.daily_stats["total_requests"] += 1
@@ -104,17 +108,18 @@ class HybridCommandDiscovery:
                 self.redis_client = await get_redis_client()
 
             # STEP 1: LLM-Powered Intent Normalization
-            normalization_start = time.time()
-            normalized_intent = await self._normalize_intent_with_llm(intent)
-            normalization_time = time.time() - normalization_start
+            normalization_result = await self._normalize_intent_with_llm(intent)
 
             self.daily_stats["normalization_calls"] += 1
-            self.daily_stats["normalization_time_total"] += normalization_time
+            self.daily_stats["normalization_time_total"] += (
+                normalization_result.normalization_time
+            )
 
-            cache_key = f"cmd:{normalized_intent}:{platform}"
+            cache_key = f"cmd:{normalization_result.normalized_intent}:{platform}"
 
             logger.info(
-                f"Normalized '{intent}' → '{normalized_intent}' in {normalization_time * 1000:.1f}ms"
+                f"Normalized '{intent}' → '{normalization_result.normalized_intent}' "
+                f"in {normalization_result.normalization_time * 1000:.1f}ms"
             )
 
             # TIER 1: Redis cache lookup (1-5ms) - ULTRA FAST PATH
@@ -126,17 +131,30 @@ class HybridCommandDiscovery:
                 self._update_stats("redis", redis_time)
                 total_time = time.time() - start_time
                 logger.info(
-                    f"Redis hit: {normalized_intent}:{platform} in {total_time * 1000:.1f}ms"
+                    f"Redis hit: {normalization_result.normalized_intent}:{platform} "
+                    f"in {total_time * 1000:.1f}ms"
                 )
-                return (
-                    cached_result["command"],
-                    cached_result["confidence"],
-                    "redis_cache",
+
+                return DiscoveryResult(
+                    command=cached_result["command"],
+                    confidence=cached_result["confidence"],
+                    source="redis_cache",
+                    reasoning="Retrieved from Redis cache",
+                    discovery_time=total_time,
+                    cached_at=cached_result.get("cached_at"),
+                    usage_count=cached_result.get("usage_count"),
+                    discovery_metadata={
+                        "cache_key": cache_key,
+                        "redis_time": redis_time,
+                        "normalization_result": normalization_result.__dict__,
+                    },
                 )
 
             # TIER 2: PostgreSQL lookup (10-20ms) - FAST PATH
             postgres_start = time.time()
-            db_result = await self._postgres_lookup(normalized_intent, platform)
+            db_result = await self._postgres_lookup(
+                normalization_result.normalized_intent, platform
+            )
             postgres_time = time.time() - postgres_start
 
             if db_result and db_result.confidence >= 0.8:
@@ -145,317 +163,200 @@ class HybridCommandDiscovery:
                 self._update_stats("postgres", postgres_time)
                 total_time = time.time() - start_time
                 logger.info(
-                    f"PostgreSQL hit: {normalized_intent}:{platform} in {total_time * 1000:.1f}ms"
+                    f"PostgreSQL hit: {normalization_result.normalized_intent}:{platform} "
+                    f"in {total_time * 1000:.1f}ms"
                 )
-                return db_result.command, db_result.confidence, "postgres_db"
+
+                return DiscoveryResult(
+                    command=db_result.command,
+                    confidence=float(db_result.confidence),
+                    source="postgres_db",
+                    reasoning="Retrieved from PostgreSQL database and promoted to Redis",
+                    discovery_time=total_time,
+                    cached_at=db_result.last_used,
+                    usage_count=db_result.usage_count,
+                    discovery_metadata={
+                        "cache_key": cache_key,
+                        "postgres_time": postgres_time,
+                        "db_id": db_result.id,
+                        "promoted_to_redis": True,
+                        "normalization_result": normalization_result.__dict__,
+                    },
+                )
 
             # TIER 3: LLM discovery (1-2s) - LEARNING PATH
             logger.info(
-                f"Cache miss for {normalized_intent}:{platform}, using LLM discovery"
+                f"Cache miss for {normalization_result.normalized_intent}:{platform}, "
+                f"using LLM discovery"
             )
             llm_start = time.time()
             llm_result = await self._llm_discovery_with_lm_studio(
-                normalized_intent, platform, user_context
+                normalization_result.normalized_intent, platform, user_context
             )
             llm_time = time.time() - llm_start
 
             # FEEDBACK LOOP: Store in PostgreSQL + cache in Redis
             await self._store_discovery_dual(
-                normalized_intent, platform, llm_result, cache_key
+                normalization_result.normalized_intent, platform, llm_result, cache_key
             )
 
             self._update_stats("llm", llm_time)
             total_time = time.time() - start_time
             logger.info(
-                f"LLM discovery: {normalized_intent}:{platform} in {total_time * 1000:.1f}ms"
+                f"LLM discovery: {normalization_result.normalized_intent}:{platform} "
+                f"in {total_time * 1000:.1f}ms"
             )
-            return llm_result["command"], llm_result["confidence"], "llm_discovery"
+
+            return DiscoveryResult(
+                command=llm_result["command"],
+                confidence=llm_result["confidence"],
+                source="llm_discovery",
+                reasoning=llm_result.get("explanation", "Fresh LLM discovery"),
+                discovery_time=total_time,
+                cached_at=datetime.utcnow(),
+                usage_count=1,
+                discovery_metadata={
+                    "cache_key": cache_key,
+                    "llm_time": llm_time,
+                    "stored_dual": True,
+                    "llm_result": llm_result,
+                    "normalization_result": normalization_result.__dict__,
+                },
+            )
 
         except Exception as e:
             logger.error(f"Discovery failed for {intent}:{platform}: {e}")
-            return self._get_intelligent_fallback(intent), 0.5, "fallback"
+            fallback_command, fallback_confidence = self._get_intelligent_fallback(
+                intent
+            )
+            total_time = time.time() - start_time
 
-    async def _normalize_intent_with_llm(self, raw_intent: str) -> str:
+            return DiscoveryResult(
+                command=fallback_command,
+                confidence=fallback_confidence,
+                source="fallback",
+                reasoning=f"Intelligent fallback due to error: {str(e)}",
+                discovery_time=total_time,
+                discovery_metadata={
+                    "error": str(e),
+                    "fallback_used": True,
+                },
+            )
+
+    async def _normalize_intent_with_llm(self, raw_intent: str) -> NormalizationResult:
         """
-        LLM-powered intent normalization for infinite scalability.
+        ENHANCED: LLM-powered intent normalization returning NormalizationResult.
 
         Uses your existing LM Studio setup for consistent normalization.
         NO hardcoded rules - pure LLM intelligence.
         """
+        start_time = time.time()
+
         normalization_prompt = f"""You are a network automation expert. Normalize this network intent to a canonical form for caching and lookup.
 
 Original intent: "{raw_intent}"
 
-Normalization rules:
-1. Remove device names (spine1, leaf2, etc.) to make intent device-agnostic
-2. Standardize verbs: display/get/list → show
-3. Standardize nouns: neighbor/neighbour → neighbors, interface/int → interfaces
-4. Remove punctuation and extra words
-5. Use lowercase
-6. Keep core networking concepts (bgp, ospf, lldp, etc.)
+Rules:
+1. Convert to lowercase
+2. Standardize network terms (bgp, interface, route, lldp, etc.)
+3. Remove device-specific names
+4. Use consistent verb forms (show, display, get → show)
+5. Remove unnecessary words (please, can you, etc.)
+
+Return only the normalized intent, nothing else.
 
 Examples:
-"Show BGP neighbor status on spine1." → "show bgp neighbors"
-"Display LLDP neighbours for leaf2" → "show lldp neighbors"
-"Get interface counters spine1" → "show interfaces counters"
-"What's the routing table?" → "show ip route"
+"Show me BGP neighbors on spine1" → "show bgp neighbors"
+"Can you display interface status?" → "show interface status"
+"Get routing table info" → "show ip route"
 
-Return ONLY the normalized intent (no explanations):"""
-
-        try:
-            response = await self._call_lm_studio_normalization(normalization_prompt)
-
-            if response and "normalized_intent" in response:
-                normalized = response["normalized_intent"].strip().lower()
-                logger.debug(f"LLM normalized: '{raw_intent}' → '{normalized}'")
-                return normalized
-            else:
-                # Fallback to basic normalization if LLM fails
-                logger.warning("LLM normalization failed, using fallback")
-                return self._basic_fallback_normalization(raw_intent)
-
-        except Exception as e:
-            logger.error(f"LLM normalization error: {e}")
-            return self._basic_fallback_normalization(raw_intent)
-
-    async def _call_lm_studio_normalization(self, prompt: str) -> Optional[Dict]:
-        """Call LM Studio API for intent normalization using your existing setup."""
-
-        payload = {
-            "model": self.model_name,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.1,  # Low temperature for consistent normalization
-            "max_tokens": 50,  # Short response expected
-            "stream": False,
-        }
+Normalized intent:"""
 
         try:
-            timeout = aiohttp.ClientTimeout(total=self.timeout)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    f"{self.lm_studio_url}/v1/chat/completions",
-                    json=payload,
-                    headers={"Content-Type": "application/json"},
-                ) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        choices = result.get("choices", [])
-
-                        if choices:
-                            response_text = (
-                                choices[0].get("message", {}).get("content", "").strip()
-                            )
-                            logger.debug(
-                                f"LM Studio normalization response: {response_text}"
-                            )
-
-                            # Parse the normalized intent from response
-                            return {"normalized_intent": response_text}
-                    else:
-                        error_text = await response.text()
-                        logger.error(
-                            f"LM Studio normalization API error {response.status}: {error_text}"
-                        )
-
-        except Exception as e:
-            logger.error(f"LM Studio normalization call failed: {e}")
-
-        return None
-
-    def _basic_fallback_normalization(self, raw_intent: str) -> str:
-        """Basic fallback normalization when LLM is unavailable."""
-        # Simple fallback rules for when LLM fails
-        normalized = raw_intent.lower().strip()
-
-        # Remove common punctuation
-        normalized = normalized.rstrip(".!?")
-
-        # Basic device name removal (simple regex)
-        import re
-
-        normalized = re.sub(r"\s+(on|for|from)\s+\w+\d*$", "", normalized)
-
-        # Basic verb standardization
-        normalized = normalized.replace("display ", "show ")
-        normalized = normalized.replace("get ", "show ")
-        normalized = normalized.replace("list ", "show ")
-
-        return normalized.strip()
-
-    async def _llm_discovery_with_lm_studio(
-        self, normalized_intent: str, platform: str, user_context: Optional[Dict] = None
-    ) -> Dict[str, Any]:
-        """
-        LLM-powered command discovery using your existing LM Studio setup.
-
-        NO hardcoded patterns - pure LLM intelligence for infinite scalability.
-        """
-        discovery_prompt = f"""You are an expert network engineer with deep knowledge of {platform} commands.
-
-Task: Discover the exact CLI command for this normalized intent: "{normalized_intent}"
-Platform: {platform}
-
-Requirements:
-1. Return the exact command syntax for {platform}
-2. Use only read-only commands (show, display, etc.)
-3. Provide confidence score 0.0-1.0 based on command certainty
-4. Include brief explanation
-
-Context: {user_context if user_context else "Standard network operation"}
-
-Examples for {platform}:
-- "show bgp neighbors" → "show bgp summary" or "show ip bgp neighbors"
-- "show interfaces" → "show interfaces"
-- "show ip route" → "show ip route"
-- "show version" → "show version"
-
-Response format (JSON only):
-{{"command": "exact command here", "confidence": 0.95, "explanation": "brief explanation"}}"""
-
-        try:
-            response = await self._call_lm_studio_discovery(discovery_prompt)
-
-            if response:
-                return {
-                    "command": response.get("command", "show version"),
-                    "confidence": response.get("confidence", 0.7),
-                    "explanation": response.get(
-                        "explanation", "LLM discovered command"
-                    ),
-                    "alternatives": response.get("alternatives", []),
-                    "discovery_metadata": {
-                        "method": "lm_studio_llm",
-                        "platform": platform,
-                        "normalized_intent": normalized_intent,
-                        "discovery_timestamp": datetime.utcnow().isoformat(),
-                    },
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(self.timeout)
+            ) as session:
+                payload = {
+                    "model": self.model_name,
+                    "messages": [{"role": "user", "content": normalization_prompt}],
+                    "temperature": 0.1,
+                    "max_tokens": 50,
                 }
-            else:
-                # Fallback if LLM discovery fails
-                return await self._intelligent_fallback_discovery(
-                    normalized_intent, platform
-                )
 
-        except Exception as e:
-            logger.error(
-                f"LM Studio discovery failed for {normalized_intent}:{platform}: {e}"
-            )
-            return await self._intelligent_fallback_discovery(
-                normalized_intent, platform
-            )
-
-    async def _call_lm_studio_discovery(self, prompt: str) -> Optional[Dict]:
-        """Call LM Studio API for command discovery using your existing setup."""
-
-        payload = {
-            "model": self.model_name,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.1,  # Low temperature for consistent results
-            "max_tokens": 200,
-            "stream": False,
-        }
-
-        try:
-            timeout = aiohttp.ClientTimeout(total=self.timeout)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(
-                    f"{self.lm_studio_url}/v1/chat/completions",
-                    json=payload,
-                    headers={"Content-Type": "application/json"},
+                    f"{self.lm_studio_url}/v1/chat/completions", json=payload
                 ) as response:
                     if response.status == 200:
-                        result = await response.json()
-                        choices = result.get("choices", [])
-
-                        if choices:
-                            response_text = (
-                                choices[0].get("message", {}).get("content", "").strip()
-                            )
-                            logger.debug(
-                                f"LM Studio discovery response: {response_text}"
-                            )
-
-                            # Parse JSON response
-                            try:
-                                # Clean and parse JSON (reuse existing logic if available)
-                                cleaned_response = self._clean_json_response(
-                                    response_text
-                                )
-                                parsed = json.loads(cleaned_response)
-                                logger.info(
-                                    "Successfully parsed LM Studio discovery response"
-                                )
-                                return parsed
-                            except json.JSONDecodeError as e:
-                                logger.error(f"Invalid JSON in discovery response: {e}")
-                                logger.debug(f"Problematic response: {response_text}")
-                    else:
-                        error_text = await response.text()
-                        logger.error(
-                            f"LM Studio discovery API error {response.status}: {error_text}"
+                        data = await response.json()
+                        normalized = (
+                            data["choices"][0]["message"]["content"].strip().lower()
                         )
 
+                        normalization_time = time.time() - start_time
+
+                        return NormalizationResult(
+                            original_intent=raw_intent,
+                            normalized_intent=normalized,
+                            normalization_time=normalization_time,
+                            confidence=1.0,
+                            normalization_metadata={
+                                "llm_model": self.model_name,
+                                "prompt_tokens": data.get("usage", {}).get(
+                                    "prompt_tokens"
+                                ),
+                                "completion_tokens": data.get("usage", {}).get(
+                                    "completion_tokens"
+                                ),
+                            },
+                        )
+                    else:
+                        logger.warning(
+                            f"LLM normalization failed with status {response.status}"
+                        )
+                        raise Exception(f"LLM API error: {response.status}")
+
         except Exception as e:
-            logger.error(f"LM Studio discovery call failed: {e}")
+            logger.warning(f"LLM normalization failed: {e}, using basic normalization")
+            # Fallback to basic normalization
+            basic_normalized = self._basic_normalization(raw_intent)
+            normalization_time = time.time() - start_time
 
-        return None
+            return NormalizationResult(
+                original_intent=raw_intent,
+                normalized_intent=basic_normalized,
+                normalization_time=normalization_time,
+                confidence=0.8,  # Lower confidence for fallback
+                normalization_metadata={
+                    "fallback_used": True,
+                    "error": str(e),
+                },
+            )
 
-    def _clean_json_response(self, response_text: str) -> str:
-        """Clean JSON response from LM Studio (integrate with existing logic if available)."""
-        # Basic JSON cleaning - enhance this based on your existing patterns
-        cleaned = response_text.strip()
+    def _basic_normalization(self, intent: str) -> str:
+        """Basic fallback normalization when LLM is unavailable."""
+        normalized = intent.lower().strip()
 
-        # Remove markdown code blocks if present
-        if cleaned.startswith("```json"):
-            cleaned = cleaned[7:]
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
-
-        # Find JSON object
-        start = cleaned.find("{")
-        end = cleaned.rfind("}") + 1
-
-        if start >= 0 and end > start:
-            cleaned = cleaned[start:end]
-
-        return cleaned.strip()
-
-    async def _intelligent_fallback_discovery(
-        self, normalized_intent: str, platform: str
-    ) -> Dict[str, Any]:
-        """Intelligent fallback using intent analysis when LLM is unavailable."""
-        # Analyze the normalized intent for common patterns
-        intent_lower = normalized_intent.lower()
-
-        if "bgp" in intent_lower:
-            command = "show bgp summary"
-            confidence = 0.8
-        elif "interface" in intent_lower:
-            command = "show interfaces"
-            confidence = 0.9
-        elif "route" in intent_lower or "routing" in intent_lower:
-            command = "show ip route"
-            confidence = 0.8
-        elif "lldp" in intent_lower:
-            command = "show lldp neighbors"
-            confidence = 0.8
-        elif "version" in intent_lower:
-            command = "show version"
-            confidence = 1.0
-        else:
-            command = "show version"
-            confidence = 0.5
-
-        return {
-            "command": command,
-            "confidence": confidence,
-            "explanation": f"Intelligent fallback for {normalized_intent}",
-            "discovery_metadata": {
-                "method": "intelligent_fallback",
-                "pattern_match": True,
-                "discovery_timestamp": datetime.utcnow().isoformat(),
-            },
+        # Basic substitutions
+        replacements = {
+            "display": "show",
+            "get": "show",
+            "check": "show",
+            "what is": "show",
+            "what are": "show",
+            "neighbors": "neighbors",
+            "neighbour": "neighbors",
+            "neighboors": "neighbors",
         }
+
+        for old, new in replacements.items():
+            normalized = normalized.replace(old, new)
+
+        # Remove common filler words
+        filler_words = ["please", "can you", "could you", "me", "the", "a", "an"]
+        words = normalized.split()
+        filtered_words = [w for w in words if w not in filler_words]
+
+        return " ".join(filtered_words)
 
     async def _redis_lookup(self, cache_key: str) -> Optional[Dict]:
         """Ultra-fast Redis cache lookup with error handling."""
@@ -520,6 +421,153 @@ Response format (JSON only):
 
         except Exception as e:
             logger.warning(f"Failed to promote to Redis cache: {e}")
+
+    async def _llm_discovery_with_lm_studio(
+        self, normalized_intent: str, platform: str, user_context: Optional[Dict] = None
+    ) -> Dict[str, Any]:
+        """LLM-powered command discovery using your existing LM Studio setup."""
+
+        discovery_prompt = f"""You are a network automation expert for {platform} devices.
+Generate the exact command for this normalized intent: "{normalized_intent}"
+
+Platform: {platform}
+Intent: {normalized_intent}
+Context: {user_context or {}}
+
+Respond with a JSON object:
+{{
+    "command": "exact command to execute",
+    "confidence": 0.95,
+    "explanation": "brief explanation of the command"
+}}
+
+Examples for arista_eos:
+- "show bgp neighbors" → {{"command": "show bgp summary", "confidence": 0.95}}
+- "show interface status" → {{"command": "show interfaces status", "confidence": 0.95}}
+- "show version" → {{"command": "show version", "confidence": 1.0}}
+
+JSON response:"""
+
+        try:
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(self.timeout)
+            ) as session:
+                payload = {
+                    "model": self.model_name,
+                    "messages": [{"role": "user", "content": discovery_prompt}],
+                    "temperature": 0.1,
+                    "max_tokens": 200,
+                }
+
+                async with session.post(
+                    f"{self.lm_studio_url}/v1/chat/completions", json=payload
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        response_text = data["choices"][0]["message"]["content"].strip()
+
+                        # Clean and parse JSON response
+                        cleaned_json = self._clean_json_response(response_text)
+                        result = json.loads(cleaned_json)
+
+                        # Validate and enhance result
+                        if "command" not in result:
+                            raise ValueError("Missing 'command' in LLM response")
+
+                        result.setdefault("confidence", 0.9)
+                        result.setdefault(
+                            "explanation", f"LLM discovery for {normalized_intent}"
+                        )
+                        result["discovery_metadata"] = {
+                            "method": "lm_studio_llm",
+                            "model": self.model_name,
+                            "discovery_timestamp": datetime.utcnow().isoformat(),
+                            "tokens_used": data.get("usage", {}),
+                        }
+
+                        return result
+                    else:
+                        logger.error(
+                            f"LLM discovery failed with status {response.status}"
+                        )
+                        raise Exception(f"LLM API error: {response.status}")
+
+        except Exception as e:
+            logger.error(f"LLM discovery failed: {e}")
+            # Use intelligent fallback
+            return await self._intelligent_fallback_discovery(
+                normalized_intent, platform
+            )
+
+    def _clean_json_response(self, response_text: str) -> str:
+        """Clean LLM response to extract valid JSON."""
+        # Basic JSON cleaning - enhance this based on your existing patterns
+        cleaned = response_text.strip()
+
+        # Remove markdown code blocks if present
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+
+        # Find JSON object
+        start = cleaned.find("{")
+        end = cleaned.rfind("}") + 1
+
+        if start >= 0 and end > start:
+            cleaned = cleaned[start:end]
+
+        return cleaned.strip()
+
+    async def _intelligent_fallback_discovery(
+        self, normalized_intent: str, platform: str
+    ) -> Dict[str, Any]:
+        """Intelligent fallback using intent analysis when LLM is unavailable."""
+        # Analyze the normalized intent for common patterns
+        intent_lower = normalized_intent.lower()
+
+        if "bgp" in intent_lower:
+            command = "show bgp summary"
+            confidence = 0.8
+        elif "interface" in intent_lower:
+            command = "show interfaces"
+            confidence = 0.9
+        elif "route" in intent_lower or "routing" in intent_lower:
+            command = "show ip route"
+            confidence = 0.8
+        elif "lldp" in intent_lower:
+            command = "show lldp neighbors"
+            confidence = 0.8
+        elif "version" in intent_lower:
+            command = "show version"
+            confidence = 1.0
+        else:
+            command = "show version"
+            confidence = 0.5
+
+        return {
+            "command": command,
+            "confidence": confidence,
+            "explanation": f"Intelligent fallback for {normalized_intent}",
+            "discovery_metadata": {
+                "method": "intelligent_fallback",
+                "pattern_match": True,
+                "discovery_timestamp": datetime.utcnow().isoformat(),
+            },
+        }
+
+    def _get_intelligent_fallback(self, intent: str) -> tuple[str, float]:
+        """Quick fallback for error conditions."""
+        intent_lower = intent.lower()
+
+        if "bgp" in intent_lower:
+            return "show bgp summary", 0.7
+        elif "interface" in intent_lower:
+            return "show interfaces", 0.8
+        elif "version" in intent_lower:
+            return "show version", 0.9
+        else:
+            return "show version", 0.5
 
     async def _store_discovery_dual(
         self,
@@ -596,7 +644,6 @@ Response format (JSON only):
                 )
             )
             await session.execute(stmt)
-            await session.commit()
         except Exception as e:
             logger.warning(f"Failed to update usage stats: {e}")
 
@@ -604,107 +651,55 @@ Response format (JSON only):
         """Calculate intelligent TTL based on usage patterns and confidence."""
         base_ttl = 3600  # 1 hour base
 
-        # High usage commands get longer TTL
-        if usage_count > 10:
-            base_ttl *= 2
-        elif usage_count > 50:
-            base_ttl *= 4
-
         # High confidence commands get longer TTL
-        if confidence > 0.9:
-            base_ttl = int(base_ttl * 1.5)
+        confidence_multiplier = confidence * 2
 
-        # Cap at 24 hours, minimum 30 minutes
-        return min(max(base_ttl, 1800), 86400)
+        # Frequently used commands get longer TTL
+        usage_multiplier = min(usage_count / 10, 3)  # Cap at 3x
 
-    def _get_intelligent_fallback(self, intent: str) -> str:
-        """Provide intelligent fallback command based on intent analysis."""
-        intent_lower = intent.lower()
+        final_ttl = int(base_ttl * confidence_multiplier * (1 + usage_multiplier))
+        return min(final_ttl, 86400)  # Cap at 24 hours
 
-        if "bgp" in intent_lower:
-            return "show bgp summary"
-        elif "interface" in intent_lower:
-            return "show interfaces"
-        elif "route" in intent_lower:
-            return "show ip route"
-        elif "lldp" in intent_lower:
-            return "show lldp neighbors"
-        else:
-            return "show version"
-
-    def _update_stats(self, tier: str, response_time: float):
-        """Update daily performance statistics for analytics."""
-        if tier == "redis":
+    def _update_stats(self, source: str, response_time: float):
+        """Update performance statistics for analytics."""
+        if source == "redis":
             self.daily_stats["redis_hits"] += 1
             self.daily_stats["redis_time_total"] += response_time
-        elif tier == "postgres":
+        elif source == "postgres":
             self.daily_stats["postgres_hits"] += 1
             self.daily_stats["postgres_time_total"] += response_time
-        elif tier == "llm":
+        elif source == "llm":
             self.daily_stats["llm_discoveries"] += 1
             self.daily_stats["llm_time_total"] += response_time
 
-    async def get_performance_stats(self) -> Dict[str, Any]:
-        """Get current performance statistics for monitoring and optimization."""
-        total_requests = self.daily_stats["total_requests"]
-        if total_requests == 0:
-            return {"status": "no_requests", "cache_hit_rate": 0.0}
+    def get_performance_stats(self) -> Dict[str, Any]:
+        """Get current performance statistics."""
+        stats = self.daily_stats.copy()
 
-        redis_hits = self.daily_stats["redis_hits"]
-        postgres_hits = self.daily_stats["postgres_hits"]
-        llm_discoveries = self.daily_stats["llm_discoveries"]
-        normalization_calls = self.daily_stats["normalization_calls"]
+        # Calculate derived metrics
+        if stats["total_requests"] > 0:
+            stats["redis_hit_rate"] = stats["redis_hits"] / stats["total_requests"]
+            stats["postgres_hit_rate"] = (
+                stats["postgres_hits"] / stats["total_requests"]
+            )
+            stats["llm_discovery_rate"] = (
+                stats["llm_discoveries"] / stats["total_requests"]
+            )
 
-        cache_hits = redis_hits + postgres_hits
-        cache_hit_rate = (cache_hits / total_requests) * 100
+            if stats["redis_hits"] > 0:
+                stats["avg_redis_time"] = (
+                    stats["redis_time_total"] / stats["redis_hits"]
+                )
+            if stats["postgres_hits"] > 0:
+                stats["avg_postgres_time"] = (
+                    stats["postgres_time_total"] / stats["postgres_hits"]
+                )
+            if stats["llm_discoveries"] > 0:
+                stats["avg_llm_time"] = (
+                    stats["llm_time_total"] / stats["llm_discoveries"]
+                )
 
-        return {
-            "total_requests": total_requests,
-            "cache_hit_rate": cache_hit_rate,
-            "redis_hit_rate": (redis_hits / total_requests) * 100,
-            "postgres_hit_rate": (postgres_hits / total_requests) * 100,
-            "llm_discovery_rate": (llm_discoveries / total_requests) * 100,
-            "normalization_calls": normalization_calls,
-            "avg_redis_time_ms": self._safe_avg_time("redis_time_total", redis_hits),
-            "avg_postgres_time_ms": self._safe_avg_time(
-                "postgres_time_total", postgres_hits
-            ),
-            "avg_llm_time_ms": self._safe_avg_time("llm_time_total", llm_discoveries),
-            "avg_normalization_time_ms": self._safe_avg_time(
-                "normalization_time_total", normalization_calls
-            ),
-            "performance_tier": self._get_performance_tier(cache_hit_rate),
-            "normalization_enabled": True,
-            "llm_powered": True,
-        }
-
-    def _safe_avg_time(self, time_key: str, count: int) -> float:
-        """Safely calculate average response time."""
-        if count == 0:
-            return 0.0
-        return (self.daily_stats[time_key] / count) * 1000  # Convert to milliseconds
-
-    def _get_performance_tier(self, cache_hit_rate: float) -> str:
-        """Classify current performance tier based on cache hit rate."""
-        if cache_hit_rate >= 90:
-            return "Ultra-Optimized"
-        elif cache_hit_rate >= 70:
-            return "Optimized"
-        elif cache_hit_rate >= 50:
-            return "Improving"
-        elif cache_hit_rate >= 30:
-            return "Learning"
-        else:
-            return "Initial"
-
-    async def cleanup_expired_cache(self):
-        """Background task to clean up expired cache entries and optimize performance."""
-        try:
-            # This would be called periodically to maintain cache health
-            # Implementation depends on your task scheduling approach
-            logger.info("Cache cleanup completed")
-        except Exception as e:
-            logger.error(f"Cache cleanup failed: {e}")
+        return stats
 
 
 # Factory function for easy integration with existing Universal Pipeline

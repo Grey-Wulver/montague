@@ -1,8 +1,6 @@
-# File: ~/net-chatbot/app/services/rag_command_validation.py
-# RAG Command Validation Service - Barrow Integration for Smart Command Suggestions
-
+# app/services/rag_command_validation.py
 """
-RAG Command Validation Service - Phase 6 Smart Command Suggestions
+RAG Command Validation Service - Barrow Integration for Smart Command Suggestions
 
 Integrates with Barrow RAG system (port 8001) to provide:
 - Command validation using 40k+ vendor documentation chunks
@@ -20,6 +18,7 @@ Maintains VS Code + Ruff + Black standards with 88-character line length.
 
 import asyncio
 import logging
+import os
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -51,46 +50,28 @@ class CommandValidationResult:
     fallback_used: bool = False
 
 
-@dataclass
-class CommandCorrectionSuggestion:
-    """Command correction suggestion for user interaction"""
-
-    original_command: str
-    suggested_command: str
-    vendor: str
-    platform: str
-    confidence: float
-    explanation: str
-    documentation_reference: str
-
-    # User interaction
-    requires_confirmation: bool = True
-    auto_apply_threshold: float = 0.95  # Auto-apply if confidence > 95%
-
-
 class RAGCommandValidationService:
     """
     RAG-powered command validation service for enterprise-grade command suggestions.
 
-    Features:
-    - Pre-execution command validation
-    - Documentation-backed command suggestions
-    - Interactive correction workflow
-    - Learning integration with existing PostgreSQL
-    - Graceful fallback when RAG unavailable
+    Integrates with Barrow RAG service to validate commands against 40k+ documentation chunks.
+    Provides smart suggestions for invalid commands with vendor documentation backing.
     """
 
-    def __init__(
-        self,
-        barrow_url: str = "http://localhost:8001",
-        timeout: int = 10,
-        max_retries: int = 2,
-        confidence_threshold: float = 0.8,
-    ):
-        self.barrow_url = barrow_url
-        self.timeout = timeout
-        self.max_retries = max_retries
-        self.confidence_threshold = confidence_threshold
+    def __init__(self):
+        """Initialize RAG validation service with Barrow integration"""
+
+        # FIXED: Use environment variable with correct URL
+        self.rag_service_url = os.getenv(
+            "RAG_SERVICE_URL", "http://192.168.1.11:8001/api/v1"
+        )
+        self.rag_timeout = 10
+        self.max_retries = 2
+
+        # Validation configuration
+        self.validation_confidence_threshold = 0.8
+        self.suggestion_confidence_threshold = 0.7
+        self.auto_apply_threshold = 0.95
 
         # Performance tracking
         self.stats = {
@@ -99,33 +80,28 @@ class RAGCommandValidationService:
             "invalid_commands": 0,
             "suggestions_provided": 0,
             "rag_service_errors": 0,
+            "fallback_validations": 0,
             "average_validation_time": 0.0,
-            "correction_acceptance_rate": 0.0,
         }
-
-    async def health_check(self) -> bool:
-        """Check if Barrow RAG service is available"""
-        try:
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=5)
-            ) as session:
-                async with session.get(f"{self.barrow_url}/api/v1/health") as response:
-                    return response.status == 200
-        except Exception as e:
-            logger.warning(f"RAG service health check failed: {e}")
-            return False
 
     async def validate_command(
         self,
         command: str,
         vendor: str,
         platform: str,
-        device_name: str = None,
+        device_context: Optional[Dict] = None,
     ) -> CommandValidationResult:
         """
-        Validate command using RAG documentation knowledge.
+        Validate a single command using RAG service.
 
-        Returns validation result with suggestions if command is invalid.
+        Args:
+            command: The command to validate
+            vendor: Device vendor (arista, cisco, juniper, etc.)
+            platform: Platform (arista_eos, cisco_ios, etc.)
+            device_context: Optional device context for validation
+
+        Returns:
+            CommandValidationResult with validation outcome and suggestions
         """
         start_time = time.time()
         self.stats["total_validations"] += 1
@@ -182,123 +158,69 @@ class RAGCommandValidationService:
 
         This is the main integration point with Universal Request Processor.
         """
-        validation_results = {}
-
         logger.info(f"🔍 RAG validating {len(discovery_results)} discovered commands")
 
-        # Create device lookup for efficient access
-        device_lookup = {device.name: device for device in devices}
+        validation_results = {}
 
         # Validate each discovered command
-        validation_tasks = []
         for device_name, discovery_info in discovery_results.items():
-            device = device_lookup.get(device_name)
-            if device:
-                task = self.validate_command(
-                    command=discovery_info.discovered_command,
-                    vendor=device.vendor,
-                    platform=device.platform,
-                    device_name=device_name,
-                )
-                validation_tasks.append((device_name, task))
+            # Find the corresponding device object
+            device = next((d for d in devices if d.name == device_name), None)
+            if not device:
+                logger.warning(f"Device {device_name} not found for validation")
+                continue
 
-        # Execute validations concurrently
-        for device_name, task in validation_tasks:
-            try:
-                validation_result = await task
-                validation_results[device_name] = validation_result
-            except Exception as e:
-                logger.error(f"Validation failed for {device_name}: {e}")
-                # Continue with other validations
+            # Validate the discovered command
+            validation_result = await self.validate_command(
+                command=discovery_info.discovered_command,
+                vendor=device.vendor,
+                platform=device.platform,
+                device_context={"device_name": device_name, "site": device.site},
+            )
+
+            validation_results[device_name] = validation_result
 
         return validation_results
-
-    def generate_correction_suggestions(
-        self,
-        validation_results: Dict[str, CommandValidationResult],
-        discovery_results: Dict[str, Any],
-        devices: List[Any],
-    ) -> List[CommandCorrectionSuggestion]:
-        """
-        Generate user-friendly correction suggestions for invalid commands.
-        """
-        suggestions = []
-        device_lookup = {device.name: device for device in devices}
-
-        for device_name, validation_result in validation_results.items():
-            if not validation_result.is_valid and validation_result.suggested_command:
-                device = device_lookup.get(device_name)
-                discovery_info = discovery_results.get(device_name)
-
-                if device and discovery_info:
-                    suggestion = CommandCorrectionSuggestion(
-                        original_command=discovery_info.discovered_command,
-                        suggested_command=validation_result.suggested_command,
-                        vendor=device.vendor,
-                        platform=device.platform,
-                        confidence=validation_result.confidence,
-                        explanation=validation_result.explanation
-                        or "Command syntax correction",
-                        documentation_reference=validation_result.documentation_source
-                        or "Vendor documentation",
-                    )
-                    suggestions.append(suggestion)
-
-        return suggestions
 
     def _build_validation_query(self, command: str, vendor: str, platform: str) -> str:
         """Build RAG query for command validation"""
 
-        # Create specific validation query for Barrow
         query = f"""
-        Validate this network command syntax for {vendor} {platform}:
-
+        Validate this network command for {vendor} {platform}:
         Command: {command}
 
-        Is this command valid? If not, what is the correct syntax?
-        Provide the exact correct command if available.
+        Is this command valid? If not, what is the correct command?
+        Include explanation and reference to documentation.
         """
 
         return query.strip()
 
     async def _query_barrow_rag(
-        self, query: str, vendor: str = None
+        self, query: str, vendor: str
     ) -> Optional[Dict[str, Any]]:
         """Query Barrow RAG service for command validation"""
 
-        rag_start_time = time.time()
-
-        # Build RAG API request
-        request_payload = {
-            "question": query,
-            "vendor": vendor.lower() if vendor else None,
-            "context_limit": 3,
-            "include_sources": True,
-        }
-
         for attempt in range(self.max_retries + 1):
             try:
-                timeout = aiohttp.ClientTimeout(total=self.timeout)
-                async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(self.rag_timeout)
+                ) as session:
+                    # FIXED: Use correct payload format
+                    payload = {
+                        "question": query,  # Use 'question' not 'query'
+                        "vendor": vendor,
+                    }
+
+                    # FIXED: Use correct endpoint /rag/query
                     async with session.post(
-                        f"{self.barrow_url}/api/v1/rag/query",
-                        json=request_payload,
-                        headers={"Content-Type": "application/json"},
+                        f"{self.rag_service_url}/rag/query", json=payload
                     ) as response:
                         if response.status == 200:
                             result = await response.json()
-                            rag_time = time.time() - rag_start_time
-
-                            logger.debug(
-                                f"RAG query successful in {rag_time:.2f}s: "
-                                f"Confidence={result.get('confidence', 0):.2f}"
-                            )
-
                             return result
                         else:
-                            error_text = await response.text()
                             logger.warning(
-                                f"RAG service returned {response.status}: {error_text}"
+                                f"RAG service returned {response.status}: {await response.text()}"
                             )
 
             except Exception as e:
@@ -348,54 +270,31 @@ class RAGCommandValidationService:
             explanation=explanation,
             documentation_source=documentation_source,
             validation_time=validation_time,
-            rag_response_time=rag_result.get("processing_time", 0.0),
+            rag_response_time=validation_time,  # Same as validation time for now
         )
 
     def _analyze_command_validity(self, answer: str, confidence: float) -> bool:
         """Analyze RAG answer to determine if command is valid"""
 
-        # Low confidence suggests uncertainty
-        if confidence < self.confidence_threshold:
+        # Check for explicit validity indicators
+        valid_indicators = ["valid", "correct", "proper", "accurate"]
+        invalid_indicators = ["invalid", "incorrect", "wrong", "error", "should be"]
+
+        valid_score = sum(1 for indicator in valid_indicators if indicator in answer)
+        invalid_score = sum(
+            1 for indicator in invalid_indicators if indicator in answer
+        )
+
+        # If confidence is high and no invalid indicators, consider valid
+        if confidence >= self.validation_confidence_threshold and invalid_score == 0:
+            return True
+
+        # If more invalid indicators than valid, consider invalid
+        if invalid_score > valid_score:
             return False
 
-        # Look for validity indicators in the answer
-        invalid_indicators = [
-            "invalid",
-            "incorrect",
-            "wrong",
-            "not valid",
-            "does not exist",
-            "not supported",
-            "syntax error",
-            "command not found",
-            "should be",
-            "correct command",
-            "instead use",
-        ]
-
-        valid_indicators = [
-            "valid command",
-            "correct syntax",
-            "proper command",
-            "exists",
-            "supported",
-            "available",
-        ]
-
-        answer_lower = answer.lower()
-
-        # Check for explicit invalid indicators
-        for indicator in invalid_indicators:
-            if indicator in answer_lower:
-                return False
-
-        # Check for explicit valid indicators
-        for indicator in valid_indicators:
-            if indicator in answer_lower:
-                return True
-
-        # Default to valid if high confidence and no invalid indicators
-        return confidence > 0.9
+        # Default based on confidence threshold
+        return confidence >= self.validation_confidence_threshold
 
     def _extract_suggested_command(
         self, answer: str, original_command: str
@@ -404,25 +303,21 @@ class RAGCommandValidationService:
 
         # Look for common suggestion patterns
         suggestion_patterns = [
-            r"correct command is:?\s*([^\n\r.]+)",
-            r"should be:?\s*([^\n\r.]+)",
-            r"use:?\s*([^\n\r.]+)",
-            r"instead:?\s*([^\n\r.]+)",
-            r"`([^`]+)`",  # Commands in backticks
+            "should be",
+            "correct command is",
+            "use instead",
+            "try",
         ]
 
-        import re
-
         for pattern in suggestion_patterns:
-            match = re.search(pattern, answer, re.IGNORECASE)
-            if match:
-                suggested = match.group(1).strip()
-                # Clean up the suggestion
-                suggested = re.sub(r'^["\']|["\']$', "", suggested)  # Remove quotes
-                suggested = suggested.split(".")[0]  # Take first sentence
+            if pattern in answer:
+                # Extract text after the pattern
+                parts = answer.split(pattern, 1)
+                if len(parts) > 1:
+                    suggested = parts[1].split(".")[0].strip()  # Take first sentence
 
-                if suggested and suggested != original_command:
-                    return suggested
+                    if suggested and suggested != original_command:
+                        return suggested
 
         return None
 
@@ -462,6 +357,7 @@ class RAGCommandValidationService:
         """Fallback validation when RAG service unavailable"""
 
         validation_time = time.time() - start_time
+        self.stats["fallback_validations"] += 1
 
         logger.warning(f"Using fallback validation for: {command}")
 
@@ -511,6 +407,36 @@ class RAGCommandValidationService:
         self.stats["average_validation_time"] = (
             current_avg * (total_validations - 1) + validation_time
         ) / total_validations
+
+    async def health_check(self) -> bool:
+        """Check if RAG service is available"""
+
+        try:
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(5)
+            ) as session:
+                async with session.get(f"{self.rag_service_url}/health") as response:
+                    return response.status == 200
+        except Exception:
+            return False
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get validation statistics"""
+
+        stats = self.stats.copy()
+
+        # Calculate derived metrics
+        if stats["total_validations"] > 0:
+            stats["validation_success_rate"] = (
+                stats["valid_commands"] / stats["total_validations"]
+            )
+            stats["suggestion_rate"] = (
+                stats["suggestions_provided"] / stats["invalid_commands"]
+                if stats["invalid_commands"] > 0
+                else 0
+            )
+
+        return stats
 
 
 # Global service instance

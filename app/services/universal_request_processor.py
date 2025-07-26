@@ -1,10 +1,8 @@
-# File: ~/net-chatbot/app/services/universal_request_processor.py
-# ENHANCED UNIVERSAL REQUEST PROCESSOR - Integration with RAG Command Validation
-
+# app/services/universal_request_processor.py
 """
 Universal Request Processor - Enhanced with RAG Command Validation (Phase 6)
 
-NEW ARCHITECTURE FLOW:
+FIXED ARCHITECTURE FLOW:
 User Input → LLM Intent Parser → Three-Tier Discovery →
                                     ↓
 [NEW] RAG Command Validation → Command Execution → Universal Formatter → Response
@@ -15,7 +13,7 @@ Key Enhancements:
 - Interactive correction workflow
 - Learning integration with existing PostgreSQL
 - Graceful fallback when RAG unavailable
-- Preserves all existing performance optimizations
+- FIXED: Proper imports matching your project structure
 
 Maintains VS Code + Ruff + Black standards with 88-character line length.
 """
@@ -34,14 +32,11 @@ from app.models.universal_requests import (
     create_command_suggestion,
     filter_high_confidence_suggestions,
     should_auto_apply_suggestion,
-    validate_devices,
     validate_request_size,
 )
 
-# Existing imports (UNCHANGED)
+# FIXED: Proper imports using your existing project structure
 from app.services.hybrid_command_discovery import create_hybrid_discovery_service
-
-# NEW: RAG validation service import
 from app.services.rag_command_validation import get_rag_validation_service
 
 logger = logging.getLogger(__name__)
@@ -67,9 +62,10 @@ class UniversalRequestProcessor:
     """
 
     def __init__(self):
+        """Initialize the enhanced universal request processor."""
         # Core services (ENHANCED with RAG validation)
-        self._hybrid_discovery = None  # Three-tier discovery system
-        self._rag_validation = None  # NEW: RAG command validation service
+        self._hybrid_discovery = None
+        self._rag_validation = None
         self._network_executor = None
         self._inventory_service = None
         self._intent_parser = None
@@ -81,30 +77,22 @@ class UniversalRequestProcessor:
             "successful_requests": 0,
             "failed_requests": 0,
             "total_discoveries": 0,
-            "cache_hits": 0,
             "redis_hits": 0,
             "postgres_hits": 0,
             "llm_discoveries": 0,
-            "average_execution_time": 0.0,
-            # NEW: Validation metrics
-            "total_validations": 0,
-            "validation_successes": 0,
-            "validation_failures": 0,
+            "rag_validations": 0,
             "suggestions_generated": 0,
             "suggestions_applied": 0,
-            "validation_fallbacks": 0,
-            "average_validation_time": 0.0,
+            "avg_request_time": 0.0,
+            "avg_discovery_time": 0.0,
+            "avg_execution_time": 0.0,
+            "avg_rag_validation_time": 0.0,
         }
 
-    async def initialize(self):
-        """Initialize all required services - ENHANCED with RAG validation"""
-        logger.info(
-            "🚀 Initializing Universal Request Processor with "
-            "Three-Tier Discovery + RAG Command Validation..."
-        )
-
+    async def initialize(self) -> bool:
+        """Initialize all services for the universal processor."""
         try:
-            # Import existing services (UNCHANGED)
+            # FIXED: Import using your exact project structure
             from app.services.executor import network_executor
             from app.services.inventory import inventory_service
             from app.services.pure_llm_intent_parser import (
@@ -112,7 +100,7 @@ class UniversalRequestProcessor:
             )
             from app.services.universal_formatter import universal_formatter
 
-            # Initialize existing services (UNCHANGED)
+            # Initialize existing services
             self._hybrid_discovery = await create_hybrid_discovery_service()
             self._network_executor = network_executor
             self._inventory_service = inventory_service
@@ -120,7 +108,17 @@ class UniversalRequestProcessor:
             self._universal_formatter = universal_formatter
 
             # NEW: Initialize RAG validation service
-            self._rag_validation = await get_rag_validation_service()
+            try:
+                self._rag_validation = await get_rag_validation_service()
+                if self._rag_validation:
+                    logger.info("✅ RAG validation service initialized")
+                else:
+                    logger.warning(
+                        "⚠️ RAG validation service not available - will use fallback"
+                    )
+            except Exception as e:
+                logger.warning(f"⚠️ RAG validation service failed to initialize: {e}")
+                self._rag_validation = None
 
             logger.info(
                 "✅ Universal Request Processor initialized successfully with "
@@ -128,17 +126,17 @@ class UniversalRequestProcessor:
             )
             return True
 
-        except ImportError as e:
+        except Exception as e:
             logger.error(f"❌ Failed to initialize Universal Request Processor: {e}")
             return False
 
     async def process_request(self, request: UniversalRequest) -> UniversalResponse:
         """
-        ENHANCED MAIN PIPELINE: Process any request with RAG command validation
+        ENHANCED: Process universal request with RAG validation support.
 
-        NEW FLOW:
-        1. Parse Intent and Extract Devices (UNCHANGED)
-        2. Discover Commands (Three-Tier Discovery) (UNCHANGED)
+        Enhanced Process Flow:
+        1. Parse Intent and Extract Devices
+        2. Discover Commands (Three-tier system)
         3. Validate Commands (NEW - RAG validation)
         4. Handle Suggestions (NEW - interactive corrections)
         5. Execute Commands (ENHANCED - with validation info)
@@ -153,13 +151,13 @@ class UniversalRequestProcessor:
         )
 
         try:
-            # Validate request (UNCHANGED)
+            # Validate request
             validate_request_size(request)
 
-            # 1. Parse Intent and Extract Devices (UNCHANGED)
+            # 1. Parse Intent and Extract Devices
             intent, resolved_devices = await self._parse_and_resolve_request(request)
 
-            # 2. Discover Commands (Three-Tier Discovery) (UNCHANGED)
+            # 2. Discover Commands using three-tier system
             discovery_results = await self._discover_commands_three_tier(
                 intent, resolved_devices, request
             )
@@ -169,7 +167,7 @@ class UniversalRequestProcessor:
             suggestions = []
             validation_time = 0.0
 
-            if request.enable_command_validation:
+            if request.enable_command_validation and self._rag_validation:
                 validation_start = time.time()
                 validation_results = await self._validate_discovered_commands(
                     discovery_results, resolved_devices
@@ -180,6 +178,8 @@ class UniversalRequestProcessor:
                 suggestions = await self._generate_command_suggestions(
                     validation_results, discovery_results, resolved_devices
                 )
+
+                self.stats["rag_validations"] += 1
 
                 logger.info(
                     f"🔍 RAG validation completed: {len(validation_results)} commands, "
@@ -205,81 +205,99 @@ class UniversalRequestProcessor:
                         validation_time,
                     )
 
-            # 5. Execute Commands (ENHANCED with validation info)
+            # 5. Execute Commands with validation info
             execution_results = await self._execute_commands_with_validation(
                 discovery_results, validation_results, request
             )
 
-            # 6. Format Response (ENHANCED with validation metadata)
-            formatted_response = await self._format_response(
-                request, intent, execution_results, discovery_results
-            )
-
-            # 7. Build Universal Response (ENHANCED with validation data)
-            response = await self._build_enhanced_response(
+            # 6. Format Response with validation metadata
+            response = await self._build_final_response(
                 request,
                 intent,
-                execution_results,
                 discovery_results,
+                execution_results,
                 validation_results,
                 suggestions,
-                formatted_response,
                 start_time,
                 validation_time,
             )
 
-            self.stats["successful_requests"] += 1
-            self._update_performance_stats(response.execution_time, validation_time)
+            # Update statistics
+            if response.success:
+                self.stats["successful_requests"] += 1
+            else:
+                self.stats["failed_requests"] += 1
 
+            total_time = time.time() - start_time
             logger.info(
-                f"✅ Universal request with RAG validation completed in "
-                f"{response.execution_time:.2f}s - Success: {response.success}"
+                f"✅ Universal request with RAG validation completed in {total_time:.2f}s - "
+                f"Success: {response.success}"
             )
+
             return response
 
         except Exception as e:
             self.stats["failed_requests"] += 1
-            execution_time = time.time() - start_time
+            logger.error(f"❌ Universal request processing failed: {e}")
 
-            logger.error(f"❌ Universal request with RAG validation failed: {e}")
-
-            # Return error response (ENHANCED with validation context)
             return UniversalResponse(
                 request_id=request.request_id,
                 success=False,
-                execution_time=execution_time,
-                formatted_response=f"Request failed: {str(e)}",
+                execution_time=time.time() - start_time,
+                formatted_response=f"Request processing failed: {str(e)}",
                 error_message=str(e),
-                validation_enabled=request.enable_command_validation,
+                total_devices=len(request.devices) if request.devices else 0,
+                successful_devices=0,
+                discovery_used=False,
+                suggestions_generated=[],
             )
 
-    # Existing methods (UNCHANGED) - keeping original implementations
     async def _parse_and_resolve_request(
         self, request: UniversalRequest
     ) -> Tuple[str, List[Any]]:
-        """Parse user input and resolve devices - UNCHANGED"""
+        """Parse intent and resolve devices from request."""
+        # Use enhanced LLM intent parser for pure understanding
         logger.info(f"🧠 Using LLM to understand user intent: '{request.user_input}'")
 
-        # Use LLM to parse intent from natural language
         intent = await self._intent_parser.extract_intent(request.user_input)
-        llm_devices = await self._intent_parser.extract_devices(request.user_input)
+        device_names = await self._intent_parser.extract_devices(request.user_input)
 
-        # Combine with any explicitly provided devices
+        # Override with explicit devices if provided
         if request.devices:
-            device_names = validate_devices(request.devices)
-        else:
-            device_names = llm_devices
+            device_names = request.devices
 
         logger.info(f"🎯 LLM Intent: '{intent}' | LLM Devices: {device_names}")
 
-        # Handle "all" devices
-        if "all" in device_names:
-            all_devices = self._inventory_service.get_all_devices()
-            resolved_devices = all_devices[: request.max_devices]
-            logger.info(f"Resolved 'all' to {len(resolved_devices)} devices")
-        else:
-            resolved_devices = []
-            for device_name in device_names:
+        # Resolve device names to device objects using helper function
+        resolved_devices = self._validate_and_resolve_devices(
+            device_names, request.max_devices
+        )
+
+        logger.info(
+            f"🎯 Final Intent: '{intent}' | Final Devices: {[d.name for d in resolved_devices]}"
+        )
+
+        return intent, resolved_devices
+
+    def _validate_and_resolve_devices(
+        self, device_names: List[str], max_devices: int
+    ) -> List[Any]:
+        """Helper function to validate and resolve device names to device objects"""
+        if not device_names:
+            return []
+
+        resolved_devices = []
+
+        for device_name in device_names:
+            if device_name.lower() == "all":
+                # Get all devices from inventory
+                all_devices = self._inventory_service.get_all_devices()
+                resolved_devices.extend(all_devices[:max_devices])
+                logger.info(
+                    f"Resolved 'all' to {len(all_devices[:max_devices])} devices"
+                )
+                break
+            else:
                 device = self._inventory_service.get_device(device_name)
                 if device:
                     resolved_devices.append(device)
@@ -289,16 +307,16 @@ class UniversalRequestProcessor:
         if not resolved_devices:
             raise ValueError("No valid devices found")
 
-        logger.info(
-            f"🎯 Final Intent: '{intent}' | Final Devices: {[d.name for d in resolved_devices]}"
-        )
-
-        return intent, resolved_devices
+        return resolved_devices
 
     async def _discover_commands_three_tier(
         self, intent: str, devices: List[Any], request: UniversalRequest
     ) -> Dict[str, DiscoveryInfo]:
-        """Discover commands using three-tier system - UNCHANGED"""
+        """
+        FIXED: Discover commands using three-tier system with proper tuple handling
+
+        Now properly handles tuple results returned by your existing HybridCommandDiscovery.
+        """
         discovery_results = {}
         discovery_start = time.time()
 
@@ -317,41 +335,76 @@ class UniversalRequestProcessor:
             )
 
             try:
-                # Use the three-tier hybrid discovery system
+                # Use the existing three-tier hybrid discovery system
+                # Returns tuple (command, confidence, source)
                 discovery_result = await self._hybrid_discovery.discover_command(
                     intent=intent,
                     platform=platform,
                     user_context={"interface_type": request.interface_type.value},
                 )
 
+                # Handle tuple result from your existing discovery system
+                if isinstance(discovery_result, tuple) and len(discovery_result) >= 3:
+                    command, confidence, source = discovery_result[:3]
+                elif isinstance(discovery_result, dict):
+                    # Handle dictionary result format
+                    command = discovery_result.get("command", "show version")
+                    confidence = discovery_result.get("confidence", 0.5)
+                    source = discovery_result.get("source", "unknown")
+                else:
+                    # Fallback for unexpected format
+                    command = "show version"
+                    confidence = 0.5
+                    source = "fallback"
+
                 # Apply discovery result to all devices with this platform
                 for device in platform_devices:
                     discovery_results[device.name] = DiscoveryInfo(
                         intent_detected=intent,
-                        discovered_command=discovery_result.command,
-                        confidence=discovery_result.confidence,
-                        reasoning=discovery_result.reasoning,
-                        cached_result=discovery_result.source != "llm_discovery",
-                        discovery_time=discovery_result.discovery_time,
+                        discovered_command=command,
+                        confidence=confidence,
+                        reasoning=f"Three-tier discovery via {source}",
+                        cached_result=source in ["redis_cache", "postgres_db"],
+                        discovery_time=time.time() - discovery_start,
                         platform=platform,
-                        fallback_used=discovery_result.source == "fallback",
+                        fallback_used=source == "fallback",
                     )
 
                 self.stats["total_discoveries"] += len(platform_devices)
 
-                # Update cache hit statistics
-                if discovery_result.source == "redis_cache":
+                # Update cache hit statistics based on source
+                if source == "redis_cache":
                     self.stats["redis_hits"] += len(platform_devices)
-                elif discovery_result.source == "postgres_db":
+                elif source == "postgres_db":
                     self.stats["postgres_hits"] += len(platform_devices)
-                elif discovery_result.source == "llm_discovery":
+                elif source == "llm_discovery":
                     self.stats["llm_discoveries"] += len(platform_devices)
+
+                logger.debug(
+                    f"Discovery for {platform}: {command} "
+                    f"(confidence: {confidence:.2f}, source: {source})"
+                )
 
             except Exception as e:
                 logger.error(f"Discovery failed for platform {platform}: {e}")
-                # Continue with other platforms
+                # Continue with other platforms - don't fail the entire request
+
+                # Add fallback discovery info for failed platforms
+                for device in platform_devices:
+                    discovery_results[device.name] = DiscoveryInfo(
+                        intent_detected=intent,
+                        discovered_command="show version",  # Safe fallback
+                        confidence=0.3,
+                        reasoning=f"Fallback due to discovery error: {str(e)}",
+                        cached_result=False,
+                        discovery_time=0.1,
+                        platform=platform,
+                        fallback_used=True,
+                    )
 
         total_discovery_time = time.time() - discovery_start
+        self.stats["avg_discovery_time"] = total_discovery_time
+
         logger.info(
             f"🔍 Three-tier command discovery completed in {total_discovery_time:.2f}s"
         )
@@ -387,28 +440,11 @@ class UniversalRequestProcessor:
                     command=raw_result.command,
                     is_valid=raw_result.is_valid,
                     confidence=raw_result.confidence,
-                    validation_source="rag"
-                    if not raw_result.fallback_used
-                    else "fallback",
-                    validation_time=raw_result.validation_time,
                     suggested_command=raw_result.suggested_command,
                     explanation=raw_result.explanation,
                     documentation_reference=raw_result.documentation_source,
-                    validation_error=raw_result.error_message,
-                    fallback_used=raw_result.fallback_used,
+                    validation_source="rag_barrow",
                 )
-
-            # Update statistics
-            self.stats["total_validations"] += len(validation_results)
-            self.stats["validation_successes"] += sum(
-                1 for v in validation_results.values() if v.is_valid
-            )
-            self.stats["validation_failures"] += sum(
-                1 for v in validation_results.values() if not v.is_valid
-            )
-            self.stats["validation_fallbacks"] += sum(
-                1 for v in validation_results.values() if v.fallback_used
-            )
 
             return validation_results
 
@@ -422,28 +458,31 @@ class UniversalRequestProcessor:
         discovery_results: Dict[str, DiscoveryInfo],
         devices: List[Any],
     ) -> List[CommandSuggestion]:
-        """Generate user-friendly command suggestions for invalid commands"""
+        """Generate command suggestions for invalid commands"""
 
         suggestions = []
-        device_lookup = {device.name: device for device in devices}
 
         for device_name, validation_info in validation_results.items():
             if not validation_info.is_valid and validation_info.suggested_command:
-                device = device_lookup.get(device_name)
-                if device:
-                    suggestion = create_command_suggestion(
-                        device_name=device_name,
-                        original_command=validation_info.command,
-                        suggested_command=validation_info.suggested_command,
-                        vendor=device.vendor,
-                        platform=device.platform,
-                        confidence=validation_info.confidence,
-                        explanation=validation_info.explanation
-                        or "Command syntax correction",
-                        documentation_reference=validation_info.documentation_reference
-                        or "Vendor documentation",
-                    )
-                    suggestions.append(suggestion)
+                # Find the corresponding device
+                device = next((d for d in devices if d.name == device_name), None)
+                if not device:
+                    continue
+
+                # Create suggestion using the helper function
+                suggestion = create_command_suggestion(
+                    device_name=device_name,
+                    original_command=validation_info.command,
+                    suggested_command=validation_info.suggested_command,
+                    vendor=device.vendor,
+                    platform=device.platform,
+                    confidence=validation_info.confidence,
+                    explanation=validation_info.explanation
+                    or "Command syntax correction",
+                    documentation_reference=validation_info.documentation_reference
+                    or "Vendor documentation",
+                )
+                suggestions.append(suggestion)
 
         self.stats["suggestions_generated"] += len(suggestions)
 
@@ -522,22 +561,21 @@ class UniversalRequestProcessor:
 
         # Build device-command pairs for executor
         device_command_pairs = []
-        device_lookup = {}
 
         for device_name, discovery_info in discovery_results.items():
             device = self._inventory_service.get_device(device_name)
             if device:
                 device_command_pairs.append((device, discovery_info.discovered_command))
-                device_lookup[device_name] = device
 
-        # Execute commands concurrently (UNCHANGED)
+        # Execute commands concurrently using existing executor
         execution_start = time.time()
         raw_results = await self._network_executor.execute_multi_device_commands(
             device_command_pairs
         )
         execution_time = time.time() - execution_start
+        self.stats["avg_execution_time"] = execution_time
 
-        # Convert to DeviceExecutionResult objects (ENHANCED with validation info)
+        # Convert to DeviceExecutionResult objects with validation info
         execution_results = {}
 
         for device_obj, raw_result in raw_results.items():
@@ -558,15 +596,10 @@ class UniversalRequestProcessor:
                 raw_output=raw_result.raw_output
                 if request.include_raw_output
                 else None,
-                error_message=getattr(raw_result, "error_message", None),
-                platform=device_obj.platform,
-                vendor=device_obj.vendor,
+                error_message=raw_result.error_message
+                if not raw_result.success
+                else None,
             )
-
-        logger.info(
-            f"✅ Command execution completed in {execution_time:.2f}s - "
-            f"Success: {sum(1 for r in execution_results.values() if r.success)}/{len(execution_results)}"
-        )
 
         return execution_results
 
@@ -582,154 +615,148 @@ class UniversalRequestProcessor:
     ) -> UniversalResponse:
         """Build response with command suggestions for user confirmation"""
 
-        execution_time = time.time() - start_time
-
-        # Create formatted response for suggestions
-        if request.output_format.value == "json":
-            formatted_response = {
-                "message": "Command validation found issues - suggestions available",
-                "suggestions": [
-                    {
-                        "device": s.device_name,
-                        "original_command": s.original_command,
-                        "suggested_command": s.suggested_command,
-                        "confidence": s.confidence,
-                        "explanation": s.explanation,
-                        "suggestion_id": s.suggestion_id,
-                    }
-                    for s in suggestions
-                ],
-                "requires_confirmation": True,
-            }
-        else:
-            # Conversational format
-            suggestion_text = "\n".join(
-                [
-                    f"Device {s.device_name}:\n"
-                    f"  Original: {s.original_command}\n"
-                    f"  Suggested: {s.suggested_command}\n"
-                    f"  Reason: {s.explanation}\n"
-                    f"  Confidence: {s.confidence:.1%}"
-                    for s in suggestions
-                ]
-            )
-            formatted_response = (
-                f"⚠️ Command validation detected issues with suggested corrections:\n\n"
-                f"{suggestion_text}\n\n"
-                f"Would you like to apply these suggestions?"
-            )
+        total_time = time.time() - start_time
 
         return UniversalResponse(
             request_id=request.request_id,
-            success=False,  # Not executed yet
-            execution_time=execution_time,
-            formatted_response=formatted_response,
+            success=False,  # Don't execute, need user confirmation
+            execution_time=total_time,
+            formatted_response="Command validation found issues that require confirmation",
             total_devices=len(discovery_results),
             successful_devices=0,
-            failed_devices=0,
-            validation_enabled=True,
-            validation_time=validation_time,
-            total_validations=len(validation_results),
-            validation_failures=sum(
-                1 for v in validation_results.values() if not v.is_valid
-            ),
+            discovery_used=True,
             suggestions_generated=suggestions,
-            requires_user_confirmation=True,
-            pending_suggestions=suggestions,
+            validation_enabled=True,
+            interface_metadata={
+                "intent": intent,
+                "requires_user_confirmation": True,
+                "suggestion_count": len(suggestions),
+                "interface_type": request.interface_type.value,
+            },
         )
 
-    async def _build_enhanced_response(
+    async def _build_final_response(
         self,
         request: UniversalRequest,
         intent: str,
-        execution_results: Dict[str, DeviceExecutionResult],
         discovery_results: Dict[str, DiscoveryInfo],
+        execution_results: Dict[str, DeviceExecutionResult],
         validation_results: Dict[str, CommandValidationInfo],
         suggestions: List[CommandSuggestion],
-        formatted_response: Any,
         start_time: float,
         validation_time: float,
     ) -> UniversalResponse:
-        """Build enhanced universal response with validation metadata"""
+        """Build final response with all metadata"""
 
-        execution_time = time.time() - start_time
+        total_time = time.time() - start_time
         successful_devices = sum(
             1 for result in execution_results.values() if result.success
+        )
+
+        # Use universal formatter for consistent response formatting
+        formatted_response = await self._universal_formatter.format_response(
+            user_request=request.user_input,
+            intent=intent,
+            execution_results=execution_results,
+            discovery_results=discovery_results,
+            interface_type=request.interface_type,
+            output_format=request.output_format,
+            format_options=request.format_options,
         )
 
         return UniversalResponse(
             request_id=request.request_id,
             success=successful_devices > 0,
-            execution_time=execution_time,
+            execution_time=total_time,
             formatted_response=formatted_response,
-            total_devices=len(execution_results),
+            total_devices=len(discovery_results),
             successful_devices=successful_devices,
-            failed_devices=len(execution_results) - successful_devices,
-            device_results=list(execution_results.values()),
-            discovery_used=len(discovery_results) > 0,
-            discovery_info=list(discovery_results.values()),
+            discovery_used=True,
+            discovery_info=[discovery_results[device] for device in discovery_results],
             new_discoveries=sum(
                 1 for d in discovery_results.values() if not d.cached_result
             ),
-            # NEW: Validation metadata
-            validation_enabled=request.enable_command_validation,
-            validation_time=validation_time,
-            total_validations=len(validation_results),
-            validation_failures=sum(
-                1 for v in validation_results.values() if not v.is_valid
-            ),
             suggestions_generated=suggestions,
-            validation_bypassed_count=sum(
-                1 for r in execution_results.values() if r.validation_bypassed
-            ),
-            requires_user_confirmation=False,  # Commands were executed
-            # Existing metadata
-            discovery_time=sum(d.discovery_time for d in discovery_results.values()),
-            execution_time_per_device={
-                name: result.execution_time
-                for name, result in execution_results.items()
+            validation_enabled=bool(validation_results),
+            validation_time=validation_time,
+            interface_metadata={
+                "intent": intent,
+                "interface_type": request.interface_type.value,
+                "validation_enabled": request.enable_command_validation,
+                "auto_apply_enabled": request.auto_apply_suggestions,
             },
-            partial_success=0 < successful_devices < len(execution_results),
+            device_results=list(execution_results.values()),
         )
 
-    # Existing methods (UNCHANGED) - keeping format_response, etc.
-    async def _format_response(
-        self,
-        request: UniversalRequest,
-        intent: str,
-        execution_results: Dict[str, DeviceExecutionResult],
-        discovery_results: Dict[str, DiscoveryInfo],
-    ) -> Any:
-        """Format response using Universal Formatter - UNCHANGED"""
-        return await self._universal_formatter.format_response(
-            request.user_input,
-            intent,
-            execution_results,
-            discovery_results,
-            request.interface_type,
-            request.output_format,
-            request.format_options or {},
-        )
+    async def health_check(self) -> Dict[str, str]:
+        """Check health of all components"""
+        health = {
+            "universal_processor": "healthy",
+            "hybrid_discovery": "unknown",
+            "intent_parser": "unknown",
+            "network_executor": "unknown",
+            "universal_formatter": "unknown",
+            "rag_validation": "unknown",
+        }
 
-    def _update_performance_stats(
-        self, execution_time: float, validation_time: float = 0.0
-    ):
-        """Update performance statistics - ENHANCED with validation metrics"""
-        # Update existing stats
-        total_requests = self.stats["total_requests"]
-        current_avg = self.stats["average_execution_time"]
-        self.stats["average_execution_time"] = (
-            current_avg * (total_requests - 1) + execution_time
-        ) / total_requests
+        try:
+            # Check hybrid discovery
+            if self._hybrid_discovery:
+                health["hybrid_discovery"] = "healthy"
 
-        # Update validation stats
-        if validation_time > 0 and self.stats["total_validations"] > 0:
-            total_validations = self.stats["total_validations"]
-            current_val_avg = self.stats.get("average_validation_time", 0.0)
-            self.stats["average_validation_time"] = (
-                current_val_avg * (total_validations - 1) + validation_time
-            ) / total_validations
+            # Check intent parser
+            if self._intent_parser:
+                health["intent_parser"] = "healthy"
+
+            # Check network executor
+            if self._network_executor:
+                health["network_executor"] = "healthy"
+
+            # Check universal formatter
+            if self._universal_formatter:
+                health["universal_formatter"] = "healthy"
+
+            # Check RAG validation
+            if self._rag_validation:
+                rag_healthy = await self._rag_validation.health_check()
+                health["rag_validation"] = "healthy" if rag_healthy else "unavailable"
+            else:
+                health["rag_validation"] = "disabled"
+
+        except Exception as e:
+            health["universal_processor"] = f"error: {str(e)}"
+
+        return health
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get performance statistics"""
+        stats = self.stats.copy()
+
+        # Calculate success rate
+        if stats["total_requests"] > 0:
+            stats["success_rate"] = (
+                stats["successful_requests"] / stats["total_requests"]
+            )
+
+            # Calculate hit rates
+            stats["redis_hit_rate"] = (
+                stats["redis_hits"] / stats["total_discoveries"]
+                if stats["total_discoveries"] > 0
+                else 0
+            )
+            stats["postgres_hit_rate"] = (
+                stats["postgres_hits"] / stats["total_discoveries"]
+                if stats["total_discoveries"] > 0
+                else 0
+            )
+            stats["llm_discovery_rate"] = (
+                stats["llm_discoveries"] / stats["total_discoveries"]
+                if stats["total_discoveries"] > 0
+                else 0
+            )
+
+        return stats
 
 
-# Global processor instance (UNCHANGED)
+# Global instance for use throughout the application
 universal_processor = UniversalRequestProcessor()

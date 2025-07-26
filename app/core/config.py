@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     # NEW: RAG Integration Configuration for Phase 6
     # Barrow RAG service configuration
     rag_service_enabled: bool = True
-    rag_service_url: str = "http://localhost:8001"
+    rag_service_url: str = "http://192.168.1.11:8001"  # Host machine IP
     rag_service_timeout: int = 10
     rag_service_max_retries: int = 2
 

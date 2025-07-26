@@ -1,28 +1,22 @@
 # File: ~/net-chatbot/app/models/universal_requests.py
-# ENHANCED UNIVERSAL MODELS - Add Command Validation Support for Phase 6
+# CORRECTED VERSION - Preserving working chat functionality + adding RAG validation
 
 """
-Enhanced Universal Request Models - Command Validation Support
-
-Added for Phase 6 Smart Command Suggestions:
-- CommandValidationInfo for tracking validation results
-- CommandSuggestion for user interaction
-- Enhanced UniversalResponse with validation metadata
-- Maintains all existing functionality while adding RAG validation support
-
-Maintains VS Code + Ruff + Black standards with 88-character line length.
+Universal Request/Response Models
+Foundation of the Universal Pipeline - handles ALL interfaces (Chat, API, CLI, Web)
+ENHANCED with RAG validation while preserving working chat functionality
 """
 
 import time
+import uuid
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
 
-# Existing enums (UNCHANGED)
 class InterfaceType(str, Enum):
-    """Interface type for universal requests"""
+    """Supported interface types"""
 
     CHAT = "chat"
     API = "api"
@@ -32,16 +26,29 @@ class InterfaceType(str, Enum):
 
 
 class OutputFormat(str, Enum):
-    """Output format for universal responses"""
+    """Supported output formats"""
 
     JSON = "json"
+    YAML = "yaml"
+    XML = "xml"
+    CSV = "csv"
     TABLE = "table"
+    HTML = "html"
+    MARKDOWN = "markdown"
     CONVERSATIONAL = "conversational"
     RAW = "raw"
-    MARKDOWN = "markdown"
 
 
-# NEW: Command validation models for Phase 6
+class RequestPriority(str, Enum):
+    """Request priority levels"""
+
+    LOW = "low"
+    NORMAL = "normal"
+    HIGH = "high"
+    URGENT = "urgent"
+
+
+# NEW: Command validation models for Phase 6 RAG integration
 class CommandValidationInfo(BaseModel):
     """Information about command validation using RAG"""
 
@@ -85,9 +92,82 @@ class CommandSuggestion(BaseModel):
     )
 
 
-# Existing models (ENHANCED with validation support)
+class UniversalRequest(BaseModel):
+    """
+    Universal request model that works for ALL interfaces
+    Chat, API, CLI, Web - all use this same structure
+    ENHANCED with RAG validation options
+    """
+
+    # Core request data (UNCHANGED)
+    user_input: str = Field(..., description="Natural language request")
+    devices: List[str] = Field(default=[], description="Target devices")
+
+    # Interface specification (UNCHANGED)
+    interface_type: InterfaceType = Field(default=InterfaceType.API)
+    output_format: OutputFormat = Field(default=OutputFormat.JSON)
+
+    # Request metadata (UNCHANGED)
+    request_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: Optional[str] = Field(default=None)
+    session_id: Optional[str] = Field(default=None)
+    priority: RequestPriority = Field(default=RequestPriority.NORMAL)
+
+    # Execution parameters (UNCHANGED)
+    timeout: int = Field(default=30, ge=1, le=300)
+    allow_discovery: bool = Field(default=True)
+    force_fresh_discovery: bool = Field(default=False)
+    include_raw_output: bool = Field(default=True)
+
+    # Context and memory (UNCHANGED)
+    conversation_context: Optional[Dict[str, Any]] = Field(default=None)
+    previous_requests: Optional[List[str]] = Field(default=None)
+
+    # Advanced options (UNCHANGED)
+    parallel_execution: bool = Field(default=True)
+    max_devices: int = Field(default=100, ge=1, le=1000)
+    include_discovery_info: bool = Field(default=False)
+
+    # Format-specific options (UNCHANGED)
+    format_options: Optional[Dict[str, Any]] = Field(default=None)
+
+    # NEW: RAG validation options (ADDED for Phase 6)
+    enable_command_validation: bool = Field(
+        default=True, description="Enable RAG-powered command validation"
+    )
+    auto_apply_suggestions: bool = Field(
+        default=False,
+        description="Auto-apply high-confidence suggestions without user confirmation",
+    )
+    suggestion_confidence_threshold: float = Field(
+        default=0.95, description="Confidence threshold for auto-applying suggestions"
+    )
+
+    class Config:
+        json_encoders = {
+            # Custom encoders if needed
+        }
+        schema_extra = {
+            "examples": [
+                {
+                    "user_input": "show serial number spine1",
+                    "devices": ["spine1"],
+                    "interface_type": "chat",
+                    "output_format": "conversational",
+                },
+                {
+                    "user_input": "get bgp summary for all spine devices",
+                    "devices": ["all"],
+                    "interface_type": "api",
+                    "output_format": "json",
+                    "include_raw_output": True,
+                },
+            ]
+        }
+
+
 class DeviceExecutionResult(BaseModel):
-    """Result from executing command on a single device - ENHANCED"""
+    """Result from executing command on a single device - ENHANCED with validation"""
 
     device_name: str
     success: bool
@@ -130,63 +210,11 @@ class DiscoveryInfo(BaseModel):
     fallback_used: bool = False
 
 
-class UniversalRequest(BaseModel):
-    """Universal request model for ALL interfaces - ENHANCED"""
-
-    # Core request data (UNCHANGED)
-    user_input: str = Field(..., description="Natural language input from user")
-    interface_type: InterfaceType = Field(..., description="Interface requesting this")
-    output_format: OutputFormat = Field(default=OutputFormat.CONVERSATIONAL)
-
-    # Device and execution options (UNCHANGED)
-    devices: Optional[List[str]] = Field(default=None)
-    max_devices: int = Field(default=50, le=100)
-    include_raw_output: bool = Field(default=False)
-
-    # NEW: Command validation options for Phase 6
-    enable_command_validation: bool = Field(
-        default=True, description="Enable RAG-powered command validation"
-    )
-    auto_apply_suggestions: bool = Field(
-        default=False,
-        description="Auto-apply high-confidence suggestions without user confirmation",
-    )
-    suggestion_confidence_threshold: float = Field(
-        default=0.95, description="Confidence threshold for auto-applying suggestions"
-    )
-
-    # Request metadata (UNCHANGED)
-    request_id: str = Field(default_factory=lambda: f"req_{int(time.time() * 1000)}")
-    timeout: int = Field(default=30, le=300)
-
-    # Format options (UNCHANGED)
-    format_options: Optional[Dict[str, Any]] = Field(default=None)
-
-    class Config:
-        schema_extra = {
-            "examples": [
-                {
-                    "user_input": "show interfaces status on spine1",
-                    "interface_type": "api",
-                    "output_format": "json",
-                    "devices": ["spine1"],
-                    "enable_command_validation": True,
-                    "auto_apply_suggestions": False,
-                },
-                {
-                    "user_input": "check bgp neighbors for all spine devices",
-                    "devices": ["all"],
-                    "interface_type": "api",
-                    "output_format": "json",
-                    "include_raw_output": True,
-                    "enable_command_validation": True,
-                },
-            ]
-        }
-
-
 class UniversalResponse(BaseModel):
-    """Universal response model for ALL interfaces - ENHANCED with validation"""
+    """
+    Universal response model for ALL interfaces - ENHANCED with RAG validation
+    Automatically adapts to chat, API, CLI, web, etc.
+    """
 
     # Request correlation (UNCHANGED)
     request_id: str
@@ -206,7 +234,7 @@ class UniversalResponse(BaseModel):
     # Discovery information (UNCHANGED)
     discovery_used: bool = False
     discovery_info: List[DiscoveryInfo] = Field(default=[])
-    new_discoveries: int = 0
+    new_discoveries: int = 0  # Count of new command mappings learned
 
     # NEW: Command validation information for Phase 6
     validation_enabled: bool = False
@@ -242,35 +270,12 @@ class UniversalResponse(BaseModel):
                     "request_id": "abc123",
                     "success": True,
                     "execution_time": 2.34,
-                    "formatted_response": "Interface Status: Ethernet1/1 is up",
+                    "formatted_response": "Serial Number: 5BB785FB6AC8CCAC228195AAA54F5D5D",
                     "total_devices": 1,
                     "successful_devices": 1,
-                    "validation_enabled": True,
-                    "total_validations": 1,
-                    "validation_failures": 0,
                     "discovery_used": True,
-                    "new_discoveries": 0,
-                },
-                {
-                    "request_id": "def456",
-                    "success": False,
-                    "execution_time": 1.23,
-                    "formatted_response": "Command validation failed - suggestions available",
-                    "total_devices": 1,
-                    "successful_devices": 0,
-                    "validation_enabled": True,
-                    "validation_failures": 1,
-                    "requires_user_confirmation": True,
-                    "suggestions_generated": [
-                        {
-                            "device_name": "spine1",
-                            "original_command": "show interfaces state",
-                            "suggested_command": "show interfaces status",
-                            "confidence": 0.98,
-                            "explanation": "Correct Arista EOS syntax for interface status",
-                        }
-                    ],
-                },
+                    "new_discoveries": 1,
+                }
             ]
         }
 
@@ -278,29 +283,26 @@ class UniversalResponse(BaseModel):
 class BatchUniversalRequest(BaseModel):
     """For processing multiple requests in batch - ENHANCED"""
 
-    requests: List[UniversalRequest] = Field(..., max_items=10)
-    batch_id: str = Field(default_factory=lambda: f"batch_{int(time.time() * 1000)}")
+    requests: List[UniversalRequest]
+    batch_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    max_concurrent: int = Field(default=10, ge=1, le=50)
+    fail_fast: bool = Field(default=False)
 
     # NEW: Batch validation options
     enable_batch_validation: bool = Field(
         default=True, description="Enable validation for all requests in batch"
     )
-    fail_fast: bool = Field(
-        default=False, description="Stop batch processing on first validation failure"
-    )
 
 
 class BatchUniversalResponse(BaseModel):
-    """Response from batch processing - ENHANCED"""
+    """Response for batch requests - ENHANCED"""
 
     batch_id: str
     total_requests: int
     successful_requests: int
     failed_requests: int
-    execution_time: float
-
-    # Individual responses (ENHANCED with validation info)
-    responses: List[UniversalResponse] = Field(default=[])
+    batch_execution_time: float
+    responses: List[UniversalResponse]
 
     # NEW: Batch validation summary
     total_validations: int = 0
@@ -309,13 +311,91 @@ class BatchUniversalResponse(BaseModel):
     batch_requires_confirmation: bool = False
 
 
-# Validation and utility functions (UNCHANGED + NEW)
+# Interface-specific request models (for type safety) - PRESERVED FROM ORIGINAL
+class ChatRequest(UniversalRequest):
+    """Chat-specific request with defaults"""
+
+    interface_type: InterfaceType = InterfaceType.CHAT
+    output_format: OutputFormat = OutputFormat.CONVERSATIONAL
+    include_discovery_info: bool = True
+    enable_command_validation: bool = True  # Enable validation for chat by default
+
+
+class APIRequest(UniversalRequest):
+    """API-specific request with defaults"""
+
+    interface_type: InterfaceType = InterfaceType.API
+    output_format: OutputFormat = OutputFormat.JSON
+    include_raw_output: bool = True
+    enable_command_validation: bool = True
+
+
+class CLIRequest(UniversalRequest):
+    """CLI-specific request with defaults"""
+
+    interface_type: InterfaceType = InterfaceType.CLI
+    output_format: OutputFormat = OutputFormat.TABLE
+    include_discovery_info: bool = False
+    enable_command_validation: bool = True
+
+
+class WebRequest(UniversalRequest):
+    """Web UI-specific request with defaults"""
+
+    interface_type: InterfaceType = InterfaceType.WEB
+    output_format: OutputFormat = OutputFormat.HTML
+    include_discovery_info: bool = True
+    enable_command_validation: bool = True
+
+
+# Helper functions for request creation - PRESERVED FROM ORIGINAL
+def create_chat_request(
+    message: str, devices: List[str] = None, user_id: str = None, session_id: str = None
+) -> ChatRequest:
+    """Helper to create chat requests quickly"""
+    return ChatRequest(
+        user_input=message,
+        devices=devices or [],
+        user_id=user_id,
+        session_id=session_id,
+    )
+
+
+def create_api_request(
+    query: str,
+    devices: List[str] = None,
+    output_format: OutputFormat = OutputFormat.JSON,
+    include_raw: bool = True,
+) -> APIRequest:
+    """Helper to create API requests quickly"""
+    return APIRequest(
+        user_input=query,
+        devices=devices or [],
+        output_format=output_format,
+        include_raw_output=include_raw,
+    )
+
+
+def create_cli_request(
+    command: str,
+    devices: List[str] = None,
+    table_format: bool = True,
+) -> CLIRequest:
+    """Helper to create CLI requests quickly"""
+    return CLIRequest(
+        user_input=command,
+        devices=devices or [],
+        output_format=OutputFormat.TABLE if table_format else OutputFormat.JSON,
+    )
+
+
+# Validation and utility functions - ENHANCED with validation support
 def validate_devices(devices: List[str]) -> List[str]:
     """Validate device list"""
     if not devices:
         return []
 
-    # Remove duplicates and empty strings
+    # Remove duplicates and empty strings - FIXED for Ruff
     clean_devices = list({device.strip() for device in devices if device.strip()})
 
     # Limit to reasonable number
