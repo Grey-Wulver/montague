@@ -146,15 +146,14 @@ async def get_discovery_stats() -> Dict[str, Any]:
     try:
         # Try to get dynamic discovery stats
         try:
-            from app.services.dynamic_command_discovery import dynamic_discovery
+            from app.services.hybrid_command_discovery import hybrid_discovery_service
 
-            if dynamic_discovery:
-                discovery_stats = dynamic_discovery.get_discovery_stats()
-                cache_stats = dynamic_discovery.get_cache_stats()
+            if hybrid_discovery_service:
+                stats = hybrid_discovery_service.get_stats()
                 return {
-                    "discovery_statistics": discovery_stats,
-                    "cache_statistics": cache_stats,
+                    "discovery_statistics": stats,
                     "service_status": "active",
+                    "discovery_type": "three_tier_hybrid",
                 }
         except ImportError:
             pass
@@ -187,13 +186,13 @@ async def get_discovery_stats() -> Dict[str, Any]:
 async def test_discovery() -> Dict[str, Any]:
     """Test discovery functionality"""
     try:
-        from app.services.dynamic_command_discovery import dynamic_discovery
+        from app.services.hybrid_command_discovery import hybrid_discovery_service
         from app.services.inventory import inventory_service
 
-        if not dynamic_discovery:
+        if not hybrid_discovery_service:
             return {
                 "test_status": "failed",
-                "error": "Dynamic discovery not initialized",
+                "error": "Hybrid discovery service not initialized",
             }
 
         # Get first device for testing
@@ -207,8 +206,11 @@ async def test_discovery() -> Dict[str, Any]:
         test_device = devices[0]
 
         # Test discovery with a simple intent
-        result = await dynamic_discovery.discover_command(
-            user_intent="show version", device=test_device, allow_cached=False
+        result = await hybrid_discovery_service.discover_command(
+            intent="show version",
+            device_name=test_device.name,
+            vendor=test_device.vendor,
+            force_llm=False,
         )
 
         return {

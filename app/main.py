@@ -35,8 +35,6 @@ logging.getLogger("app.services.local_llm_normalizer").setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Global variables for services
-enhanced_normalizer = None
-# REMOVED: dynamic_discovery = None  # Replaced with three-tier system
 
 
 @asynccontextmanager
@@ -50,31 +48,10 @@ async def lifespan(app: FastAPI):
     )
 
     try:
-        # Step 1: Try to initialize enhanced_output_normalizer (may not exist)
-        try:
-            from app.services.enhanced_output_normalizer import (
-                enhanced_normalizer as en,
-            )
-
-            enhanced_normalizer = en
-
-            llm_available = await enhanced_normalizer.initialize()
-            if llm_available:
-                logger.info("✅ Enhanced Output Normalizer with LLM initialized")
-            else:
-                logger.warning("⚠️ Enhanced Output Normalizer initialized without LLM")
-        except ImportError:
-            # Create fallback enhanced_normalizer
-            logger.warning("⚠️ Enhanced Output Normalizer not found - creating fallback")
-            enhanced_normalizer = create_fallback_normalizer()
-
-        # REMOVED: Step 2: Dynamic Command Discovery initialization
-        # The Universal Request Processor now handles three-tier discovery directly
-
-        # Step 3: Initialize Universal Pipeline components (ENHANCED with three-tier)
+        # Step 1: Initialize Universal Pipeline components (ENHANCED with three-tier)
         await initialize_universal_pipeline_with_three_tier()
 
-        # Step 4: Start Chat Interface using Universal Pipeline
+        # Step 2: Start Chat Interface using Universal Pipeline
         await start_universal_chat_interface()
 
         logger.info(
@@ -92,31 +69,7 @@ async def lifespan(app: FastAPI):
     await shutdown_services()
 
 
-def create_fallback_normalizer():
-    """Create fallback normalizer when enhanced_output_normalizer doesn't exist"""
-
-    class FallbackNormalizer:
-        def __init__(self):
-            self.llm_available = False
-
-        async def initialize(self):
-            logger.info("✅ Fallback normalizer initialized")
-            return False
-
-        def get_stats(self):
-            return {
-                "status": "fallback",
-                "llm_available": False,
-                "note": "Using fallback - enhanced_output_normalizer not available",
-            }
-
-        def clear_cache(self):
-            return 0
-
-    return FallbackNormalizer()
-
-
-# UPDATED: Enhanced initialization with three-tier discovery
+# Enhanced initialization with three-tier discovery
 async def initialize_universal_pipeline_with_three_tier():
     """Initialize Universal Pipeline components with Three-Tier Discovery"""
 
@@ -284,7 +237,7 @@ try:
 except Exception as e:
     logger.error(f"❌ Failed to include Analytics router: {e}")
 
-# Keep working routers only - with safe imports
+# Discovery Router
 try:
     from app.routers import discovery
 
@@ -292,18 +245,6 @@ try:
     logger.info("✅ Successfully included discovery router")
 except Exception as e:
     logger.error(f"❌ Failed to include discovery router: {e}")
-
-# Skip problematic routers for now - they need to be updated for Universal Pipeline
-# These routers import old services that no longer exist
-logger.info(
-    "ℹ️ Skipping legacy routers (devices, test_llm, test_mattermost) - use Universal Pipeline endpoints instead"
-)
-
-# Note: Users can now use:
-# - /api/v1/universal for all network operations
-# - /api/v1/chat for chat simulation
-# - /api/v1/query for quick URL-based queries
-# - /api/v1/analytics for three-tier performance monitoring
 
 
 # Root endpoint (ENHANCED with three-tier information)
@@ -374,16 +315,6 @@ async def health_check():
     }
 
     try:
-        # Check enhanced normalizer (with fallback support)
-        if enhanced_normalizer:
-            health_status["llm_available"] = getattr(
-                enhanced_normalizer, "llm_available", False
-            )
-        else:
-            health_status["llm_available"] = False
-
-        # REMOVED: Dynamic discovery check (replaced with three-tier)
-
         # Check Universal Pipeline with Three-Tier Discovery
         try:
             from app.services.universal_request_processor import universal_processor
@@ -463,19 +394,15 @@ async def get_discovery_stats():
 # Keep LLM endpoints with proper fallback handling (UNCHANGED)
 @app.get("/api/v1/llm/status", tags=["llm-testing"])
 async def llm_status():
-    """Get Local LLM status with fallback support"""
+    """Get Local LLM status"""
     try:
-        if not enhanced_normalizer:
-            return {
-                "error": "Enhanced normalizer not available",
-                "llm_available": False,
-                "service": "netops-chatbot-llm-fallback",
-            }
+        # Check LLM status via Universal Formatter
+        from app.services.universal_formatter import universal_formatter
 
         return {
-            "llm_available": getattr(enhanced_normalizer, "llm_available", False),
-            "normalization_stats": enhanced_normalizer.get_stats(),
+            "llm_available": universal_formatter.llm_available,
             "service": "netops-chatbot-llm",
+            "formatter_stats": universal_formatter.get_stats(),
         }
     except Exception as e:
         return {"error": str(e), "llm_available": False}

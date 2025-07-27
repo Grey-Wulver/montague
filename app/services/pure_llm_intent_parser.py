@@ -242,29 +242,24 @@ class EnhancedIntentParser:
     """
 
     def __init__(self):
-        # Your existing IntentParser as fallback
-        from app.services.intent_parser import IntentParser
-
-        self.base_parser = IntentParser()
-
-        # Pure LLM parser
+        # Pure LLM parser only - no pattern-based fallback
         self.llm_parser = PureLLMIntentParser()
 
         logger.info("✅ Enhanced Intent Parser initialized with pure LLM understanding")
 
     async def extract_intent(self, user_input: str) -> str:
-        """Extract intent using LLM first, fallback to base parser"""
+        """Extract intent using pure LLM understanding"""
 
         try:
-            # Try LLM first
+            # Use LLM parser
             intent = await self.llm_parser.extract_intent(user_input)
             if intent and intent.strip():
                 return intent
         except Exception as e:
             logger.warning(f"LLM intent extraction failed: {e}")
 
-        # Fallback to your existing parser
-        return await self.base_parser.extract_intent(user_input)
+        # Return the raw input as a fallback
+        return user_input
 
     async def extract_devices(
         self, user_input: str, default_devices: List[str] = None
@@ -279,8 +274,8 @@ class EnhancedIntentParser:
         except Exception as e:
             logger.warning(f"LLM device extraction failed: {e}")
 
-        # Fallback to your existing parser
-        return self.base_parser.extract_devices(user_input, default_devices)
+        # Return default devices as fallback
+        return default_devices or []
 
     async def parse(
         self, user_input: str, default_devices: List[str] = None
@@ -292,10 +287,21 @@ class EnhancedIntentParser:
 
     # Delegate other methods to base parser
     def get_supported_operations(self) -> Dict[str, str]:
-        return self.base_parser.get_supported_operations()
+        return [
+            "show version",
+            "show interfaces",
+            "show running-config",
+            "show ip route",
+            "show bgp summary",
+            "show vlan",
+            "and any other network command via LLM understanding",
+        ]
 
     def generate_help_message(self) -> str:
-        return self.base_parser.generate_help_message()
+        return (
+            "I understand natural language requests for network operations. "
+            "Just describe what you want to do, and I'll help you execute it."
+        )
 
 
 # Factory function

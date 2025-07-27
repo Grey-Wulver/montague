@@ -358,8 +358,6 @@ async def get_capabilities() -> Dict[str, Any]:
     """Get platform capabilities and supported operations"""
 
     try:
-        from app.services.intent_parser import intent_parser
-
         return {
             "universal_pipeline": "active",
             "supported_interfaces": {
@@ -386,7 +384,15 @@ async def get_capabilities() -> Dict[str, Any]:
                 "intelligent_caching": "Learning and optimization",
                 "safety_validation": "Automatic safety checks",
             },
-            "supported_operations": intent_parser.get_supported_operations(),
+            "supported_operations": [
+                "show version",
+                "show interfaces",
+                "show running-config",
+                "show ip route",
+                "show bgp summary",
+                "show vlan",
+                "and any other network command via LLM understanding",
+            ],
         }
 
     except Exception as e:

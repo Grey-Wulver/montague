@@ -15,16 +15,14 @@ from .mattermost_client import MattermostClient
 # enhanced_output_normalizer - handled in main.py with fallback
 # Don't import here to avoid import errors
 
-# Dynamic discovery (working)
+# Pure LLM Intent Parser (new architecture)
 try:
-    from .dynamic_command_discovery import DynamicCommandDiscovery
-    # Note: dynamic_discovery instance is created in main.py
+    from .pure_llm_intent_parser import create_enhanced_intent_parser
 except ImportError:
     pass
 
 # Universal Pipeline services (new architecture)
 try:
-    from .intent_parser import IntentParser, intent_parser
     from .universal_formatter import UniversalFormatter, universal_formatter
     from .universal_request_processor import (
         UniversalRequestProcessor,
@@ -45,13 +43,11 @@ __all__ = [
     "local_llm_normalizer",
     "CommunityCommandMapper",
     "community_mapper",
-    # Dynamic discovery
-    "DynamicCommandDiscovery",
+    # Pure LLM Intent Parser
+    "create_enhanced_intent_parser",
     # Universal Pipeline (new)
     "UniversalRequestProcessor",
     "universal_processor",
     "UniversalFormatter",
     "universal_formatter",
-    "IntentParser",
-    "intent_parser",
 ]
